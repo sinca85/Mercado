@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import {
@@ -381,9 +381,16 @@ app.get(['/estrategias', '/estrategias/:id'], (_req, res) => {
   res.sendFile(path.join(publicDir, 'estrategias.html'));
 });
 
-app.listen(port, () => {
-  console.log(`IOL Market Data Lab escuchando en http://localhost:${port}`);
-  const refreshMs = Math.max(1, Number(process.env.MARKET_CACHE_INTERVAL_MINUTES || 20)) * 60_000;
-  setInterval(refreshMarketSnapshot, refreshMs).unref();
-  refreshMarketSnapshot();
-});
+function startServer() {
+  app.listen(port, () => {
+    console.log(`IOL Market Data Lab escuchando en http://localhost:${port}`);
+    const refreshMs = Math.max(1, Number(process.env.MARKET_CACHE_INTERVAL_MINUTES || 20)) * 60_000;
+    setInterval(refreshMarketSnapshot, refreshMs).unref();
+    refreshMarketSnapshot();
+  });
+}
+
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) startServer();
+
+export default app;

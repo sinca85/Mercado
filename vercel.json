@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/estrategias", "destination": "/api/index" },
+    { "source": "/estrategias/(.*)", "destination": "/api/index" },
+    { "source": "/cotizaciones", "destination": "/api/index" }
+  ]
+}
