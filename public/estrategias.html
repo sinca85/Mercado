@@ -304,6 +304,11 @@
       text-align: left;
     }
 
+    .input-grid .edit-cell.editing.symbol-cell {
+      z-index: 20;
+      overflow: visible;
+    }
+
     .input-grid input {
       width: 100%;
       height: 26px;
@@ -318,6 +323,42 @@
 
     .input-grid input.symbol-input {
       text-align: left;
+    }
+
+    .symbol-menu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 30;
+      width: max-content;
+      min-width: 240px;
+      max-width: 420px;
+      max-height: 230px;
+      overflow: auto;
+      border: 1px solid #111;
+      background: #f8fbff;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+      color: #050505;
+    }
+
+    .symbol-menu button {
+      display: block;
+      width: 100%;
+      min-height: 24px;
+      padding: 4px 8px;
+      border: 0;
+      border-bottom: 1px solid #d8e1ed;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .symbol-menu button:hover {
+      background: #dcecff;
     }
 
     .payoff-chart {
@@ -672,12 +713,21 @@
 
       useEffect(() => {
         if (!editingCell || !editInputRef.current) return;
-        editInputRef.current.focus();
+        editInputRef.current.focus({ preventScroll: true });
         if (editingCell.selectAll) {
           editInputRef.current.select();
         } else {
           const length = editInputRef.current.value.length;
           editInputRef.current.setSelectionRange(length, length);
+        }
+        if (columns[editingCell.col]?.key === 'symbol' && typeof editInputRef.current.showPicker === 'function') {
+          setTimeout(() => {
+            try {
+              editInputRef.current?.showPicker();
+            } catch (_error) {
+              // Some browsers only allow showPicker directly inside user gestures.
+            }
+          }, 0);
         }
       }, [editingCell]);
 
@@ -714,7 +764,7 @@
       }
 
       function focusGrid() {
-        requestAnimationFrame(() => wrapRef.current?.focus());
+        requestAnimationFrame(() => wrapRef.current?.focus({ preventScroll: true }));
       }
 
       function clampCell(rowIndex, colIndex) {
@@ -795,6 +845,11 @@
           if (selected?.option) patch.premium = selected.option.last || selected.option.ask || rows[rowIndex].premium;
         }
         onUpdate(rowIndex, patch);
+      }
+
+      function pickSymbol(rowIndex, symbol) {
+        changeCell(rowIndex, 'symbol', symbol);
+        stopEdit();
       }
 
       function handleGridKeyDown(event) {
@@ -898,21 +953,37 @@
                           selectCell(rowIndex, colIndex);
                           focusGrid();
                         }}
+                        onMouseUp={() => {
+                          draggingRef.current = false;
+                        }}
                         onDoubleClick={() => beginEdit(rowIndex, colIndex)}
-                        onMouseEnter={() => {
-                          if (draggingRef.current) setSelection((current) => ({ ...current, end: { row: rowIndex, col: colIndex } }));
+                        onMouseEnter={(event) => {
+                          if (draggingRef.current && event.buttons === 1) {
+                            setSelection((current) => ({ ...current, end: { row: rowIndex, col: colIndex } }));
+                          }
                         }}
                       >
                         {isEditing(rowIndex, colIndex) ? (
-                          <input
-                            ref={editInputRef}
-                            className={column.key === 'symbol' ? 'symbol-input' : ''}
-                            value={row[column.key] ?? ''}
-                            list={column.key === 'symbol' ? `${gridIdRef.current}-${type}` : undefined}
-                            onChange={(event) => changeCell(rowIndex, column.key, event.target.value)}
-                            onKeyDown={(event) => handleInputKeyDown(event, rowIndex, colIndex)}
-                            onBlur={() => stopEdit({ focusBack: false })}
-                          />
+                          <>
+                            <input
+                              ref={editInputRef}
+                              className={column.key === 'symbol' ? 'symbol-input' : ''}
+                              value={row[column.key] ?? ''}
+                              list={column.key === 'symbol' ? `${gridIdRef.current}-${type}` : undefined}
+                              onChange={(event) => changeCell(rowIndex, column.key, event.target.value)}
+                              onKeyDown={(event) => handleInputKeyDown(event, rowIndex, colIndex)}
+                              onBlur={() => stopEdit({ focusBack: false })}
+                            />
+                            {column.key === 'symbol' ? (
+                              <div className="symbol-menu" onMouseDown={(event) => event.preventDefault()}>
+                                {(optionsByType[type] || []).map((item) => (
+                                  <button key={item.value} type="button" onClick={() => pickSymbol(rowIndex, item.value)}>
+                                    {item.label}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </>
                         ) : (
                           <span>{row[column.key] ?? ''}</span>
                         )}
