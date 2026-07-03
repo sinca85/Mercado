@@ -62,7 +62,23 @@ export function numberValue(...values) {
   for (const value of values) {
     if (value === null || value === undefined || value === '') continue;
     if (typeof value === 'number' && Number.isFinite(value)) return value;
-    const normalized = String(value).replace(/\./g, '').replace(',', '.');
+    const raw = String(value).trim();
+    if (!raw) continue;
+    const hasComma = raw.includes(',');
+    const hasDot = raw.includes('.');
+    let normalized = raw;
+    if (hasComma) {
+      normalized = raw.replace(/\./g, '').replace(',', '.');
+    } else if (hasDot) {
+      const dotParts = raw.split('.');
+      if (dotParts.length > 2) {
+        normalized = raw.replace(/\./g, '');
+      } else {
+        const [integerPart, decimalPart = ''] = dotParts;
+        const looksLikeThousands = integerPart.length <= 2 && decimalPart.length === 3;
+        normalized = looksLikeThousands ? raw.replace(/\./g, '') : raw;
+      }
+    }
     const numeric = Number(normalized);
     if (Number.isFinite(numeric)) return numeric;
   }
@@ -385,7 +401,7 @@ export function calculateStrategy({
 
   const percentScenarios = [];
   if (spot) {
-    for (let percent = -20; percent <= 30; percent += 2) {
+    for (let percent = -30; percent <= 30; percent += 2) {
       const underlyingPrice = spot * (1 + percent / 100);
       percentScenarios.push({
         percent,
