@@ -21,8 +21,8 @@ function cacheConfig() {
     timeZone: process.env.MARKET_CACHE_TIME_ZONE || DEFAULT_TIME_ZONE,
     startHour: Number(process.env.MARKET_CACHE_START_HOUR || DEFAULT_MARKET_START_HOUR),
     endHour: Number(process.env.MARKET_CACHE_END_HOUR || DEFAULT_MARKET_END_HOUR),
-    dbName: process.env.MONGO_DB || DEFAULT_DB_NAME,
-    mongoUri: process.env.MONGO_URI || ''
+    dbName: process.env.MONGO_DB || process.env.MONGODB_DB || DEFAULT_DB_NAME,
+    mongoUri: process.env.MONGO_URI || process.env.MONGODB_URI || ''
   };
 }
 

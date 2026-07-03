@@ -34,13 +34,14 @@ async function writeStore(store) {
 }
 
 async function strategiesCollection() {
-  if (!process.env.MONGO_URI) return null;
+  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  if (!mongoUri) return null;
   if (mongoCollection) return mongoCollection;
 
   try {
-    mongoClient = mongoClient || new MongoClient(process.env.MONGO_URI);
+    mongoClient = mongoClient || new MongoClient(mongoUri);
     await mongoClient.connect();
-    const db = mongoClient.db(process.env.MONGO_DB || DEFAULT_DB_NAME);
+    const db = mongoClient.db(process.env.MONGO_DB || process.env.MONGODB_DB || DEFAULT_DB_NAME);
     mongoCollection = db.collection('strategies');
     await mongoCollection.createIndex({ id: 1 }, { unique: true });
     return mongoCollection;
