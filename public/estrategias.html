@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
   <title>Estrategias de Opciones</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.21.6/dist/reset.css" />
   <style>
@@ -541,7 +542,9 @@
 
     function getStrategyIdFromPath() {
       const parts = window.location.pathname.split('/').filter(Boolean);
-      return parts[0] === 'estrategias' && parts[1] ? parts[1] : null;
+      if (parts[0] === 'estrategias' && parts[1]) return parts[1];
+      if (parts[0] && !['cotizaciones', 'login'].includes(parts[0])) return parts[0];
+      return null;
     }
 
     async function requestJson(url, options) {
@@ -549,6 +552,10 @@
         headers: { 'Content-Type': 'application/json' },
         ...(options || {})
       });
+      if (res.status === 401) {
+        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+        throw new Error('Login requerido.');
+      }
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || 'No se pudo completar la accion.');
       return json.data;
@@ -822,7 +829,7 @@
         {
           title: 'Nombre',
           dataIndex: 'name',
-          render: (value, row) => <a href={`/estrategias/${row.id}`}>{value || 'Estrategia sin nombre'}</a>
+          render: (value, row) => <a href={`/${row.id}`}>{value || 'Estrategia sin nombre'}</a>
         },
         {
           title: 'Subyacente',
@@ -839,7 +846,7 @@
           width: 164,
           render: (_value, row) => (
             <Space size={6}>
-              <Button size="small" href={`/estrategias/${row.id}`}>Entrar</Button>
+              <Button size="small" href={`/${row.id}`}>Entrar</Button>
               <Popconfirm
                 title="Eliminar planilla"
                 description="Esta accion no se puede deshacer."
@@ -947,7 +954,7 @@
           });
           setId(data.strategy.id);
           setPayload(data);
-          window.history.pushState(null, '', `/estrategias/${data.strategy.id}`);
+          window.history.pushState(null, '', `/${data.strategy.id}`);
         } catch (error) {
           message.error(error.message);
         }
@@ -1487,7 +1494,7 @@
               </div>
               <Space>
                 <Button href="/cotizaciones">Cotizaciones</Button>
-                <Button href="/estrategias" type="primary">Nueva estrategia</Button>
+                <Button href="/" type="primary">Nueva estrategia</Button>
               </Space>
             </header>
             <div className="content">

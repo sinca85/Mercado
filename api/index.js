@@ -2,7 +2,7 @@ import app from '../src/server.js';
 
 function normalizeVercelRewriteUrl(req) {
   const rawPath = req.query?.path;
-  if (!rawPath) return;
+  if (rawPath === undefined) return;
 
   const path = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath);
   const params = new URLSearchParams();

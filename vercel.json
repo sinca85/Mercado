@@ -1,8 +1,19 @@
 {
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    }
+  ],
   "rewrites": [
+    { "source": "/", "destination": "/api/index?path=" },
     { "source": "/api/:path*", "destination": "/api/index?path=api/:path*" },
+    { "source": "/login", "destination": "/api/index?path=login" },
     { "source": "/estrategias", "destination": "/api/index?path=estrategias" },
     { "source": "/estrategias/:path*", "destination": "/api/index?path=estrategias/:path*" },
-    { "source": "/cotizaciones", "destination": "/api/index?path=cotizaciones" }
+    { "source": "/cotizaciones", "destination": "/api/index?path=cotizaciones" },
+    { "source": "/:id", "destination": "/api/index?path=:id" }
   ]
 }

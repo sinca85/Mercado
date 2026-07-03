@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import express from 'express';
@@ -25,6 +26,10 @@ const app = express();
 const port = process.env.PORT || 3000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '../public');
+const AUTH_USER = process.env.APP_AUTH_USER || 'santi';
+const AUTH_PASSWORD = process.env.APP_AUTH_PASSWORD || 'sava9379';
+const AUTH_SECRET = process.env.APP_AUTH_SECRET || process.env.SESSION_SECRET || AUTH_PASSWORD;
+const AUTH_COOKIE = 'sabro_auth';
 const AUTO_REFRESH_UNDERLYINGS = (process.env.MARKET_CACHE_UNDERLYINGS || 'GGAL,YPFD,COME,PAMP,BMA,ALUA,SUPV')
   .split(',')
   .map((symbol) => symbol.trim().toUpperCase())
@@ -32,6 +37,79 @@ const AUTO_REFRESH_UNDERLYINGS = (process.env.MARKET_CACHE_UNDERLYINGS || 'GGAL,
 
 app.use(cors());
 app.use(express.json());
+
+function parseCookies(header = '') {
+  return Object.fromEntries(header.split(';').map((part) => {
+    const [key, ...rest] = part.trim().split('=');
+    return [key, decodeURIComponent(rest.join('=') || '')];
+  }).filter(([key]) => key));
+}
+
+function signSession(value) {
+  return crypto.createHmac('sha256', AUTH_SECRET).update(value).digest('hex');
+}
+
+function createSessionToken(username) {
+  const expiresAt = Date.now() + 1000 * 60 * 60 * 24 * 30;
+  const payload = `${username}:${expiresAt}`;
+  return `${payload}:${signSession(payload)}`;
+}
+
+function isValidSession(token) {
+  if (!token) return false;
+  const parts = String(token).split(':');
+  if (parts.length !== 3) return false;
+  const [username, expiresAt, signature] = parts;
+  if (username !== AUTH_USER || Number(expiresAt) < Date.now()) return false;
+  const expected = signSession(`${username}:${expiresAt}`);
+  return signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+
+function setNoIndex(_req, res, next) {
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  next();
+}
+
+function requireAuth(req, res, next) {
+  if (isValidSession(parseCookies(req.headers.cookie)[AUTH_COOKIE])) return next();
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ ok: false, error: 'Login requerido.' });
+  }
+  return res.redirect(`/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
+}
+
+app.use(setNoIndex);
+
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain').send('User-agent: *\nDisallow: /\n');
+});
+
+app.get('/login', (_req, res) => {
+  res.sendFile(path.join(publicDir, 'login.html'));
+});
+
+app.post('/api/login', (req, res) => {
+  const username = String(req.body?.username || '');
+  const password = String(req.body?.password || '');
+  if (username !== AUTH_USER || password !== AUTH_PASSWORD) {
+    return res.status(401).json({ ok: false, error: 'Usuario o password incorrectos.' });
+  }
+  res.cookie(AUTH_COOKIE, createSessionToken(username), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
+    maxAge: 1000 * 60 * 60 * 24 * 30,
+    path: '/'
+  });
+  res.json({ ok: true, data: { user: username } });
+});
+
+app.post('/api/logout', (_req, res) => {
+  res.clearCookie(AUTH_COOKIE, { path: '/' });
+  res.json({ ok: true, data: {} });
+});
+
+app.use(requireAuth);
 app.use(express.static(publicDir));
 
 function sendError(res, error) {
@@ -403,7 +481,7 @@ app.get('/cotizaciones', (_req, res) => {
   res.sendFile(path.join(publicDir, 'cotizaciones.html'));
 });
 
-app.get(['/estrategias', '/estrategias/:id'], (_req, res) => {
+app.get(['/', '/estrategias', '/estrategias/:id', '/:id'], (_req, res) => {
   res.sendFile(path.join(publicDir, 'estrategias.html'));
 });
 
