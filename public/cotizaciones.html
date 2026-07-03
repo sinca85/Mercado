@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cotizaciones - Opciones IOL</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.21.6/dist/reset.css" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #121821;
+      --panel: #1a2330;
+      --panel-soft: #202b39;
+      --line: #344258;
+      --text: #eef3f8;
+      --muted: #9aa8b8;
+      --accent: #38a3ff;
+      --strike: #b7ece8;
+      --yellow: #f2dd22;
+      --orange: #ff9f1c;
+      --green: #22bf43;
+      --red: #ff3939;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-width: 1120px;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #root {
+      min-height: 100vh;
+    }
+
+    .page {
+      min-height: 100vh;
+      padding-bottom: 58px;
+      background: linear-gradient(180deg, #151d28 0, #101721 100%);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      padding: 7px 12px;
+      background: #1b2533;
+      border-bottom: 1px solid #2d3a4d;
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 220px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .brand span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .ticker-strip {
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 4px 12px;
+      background: #253246;
+      border-bottom: 1px solid #344258;
+      white-space: nowrap;
+    }
+
+    .ticker-chip {
+      height: 28px;
+      padding: 4px 9px;
+      border: 0;
+      border-right: 1px solid #8d98a8;
+      color: #eaf1f8;
+      background: transparent;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 20px;
+    }
+
+    .ticker-chip:hover,
+    .ticker-chip:focus-visible {
+      background: #31425a;
+      color: #ffffff;
+      outline: none;
+    }
+
+    .content {
+      padding: 10px 12px 22px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 7px;
+      margin-bottom: 8px;
+    }
+
+    .metric {
+      min-height: 48px;
+      padding: 8px 10px;
+      background: #182231;
+      border: 1px solid #2d3a4d;
+      border-radius: 6px;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      margin-top: 2px;
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .market-collapse .ant-collapse-item {
+      margin-bottom: 5px;
+      overflow: hidden;
+      border: 1px solid #35435a;
+      border-radius: 6px;
+      background: #1a2330;
+    }
+
+    .market-collapse .ant-collapse-header {
+      min-height: 30px;
+      padding: 5px 10px !important;
+      align-items: center !important;
+      background: #263247;
+    }
+
+    .collapse-label {
+      display: grid;
+      grid-template-columns: 80px 1fr 84px 84px 100px;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+      color: #eef3f8;
+    }
+
+    .symbol {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--yellow);
+    }
+
+    .description {
+      min-width: 0;
+      overflow: hidden;
+      color: #d7e0ea;
+      font-size: 12px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .count {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-align: right;
+      text-transform: uppercase;
+    }
+
+    .chain-table .ant-table {
+      background: #17202c;
+      color: #eef3f8;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-thead > tr > th {
+      height: 24px !important;
+      padding: 3px 6px !important;
+      background: #505762 !important;
+      color: #f4f7fb !important;
+      border-color: #b9bdc4 !important;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.15;
+      text-align: right;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-thead > tr > th.group-call,
+    .chain-table.ant-table-wrapper .ant-table-thead > tr > th.group-put {
+      background: #242d3c !important;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr > td {
+      height: 22px !important;
+      padding: 2px 6px !important;
+      background: #1b2533;
+      border-color: #303b4d;
+      color: #eef3f8;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.12;
+      text-align: right;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > td {
+      background: #202b39;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr > td.strike-cell {
+      width: 92px;
+      background: var(--strike);
+      color: #12212a;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:hover > td {
+      background: #05080c !important;
+      color: #f7fbff !important;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:hover > td.strike-cell {
+      background: #05080c !important;
+      color: #ffffff !important;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:hover .price-cell,
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:hover .last-cell,
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:hover .symbol-cell,
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:hover .positive,
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:hover .negative,
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:hover .wide-spread {
+      color: #ffffff !important;
+    }
+
+    .strike-value {
+      display: inline-flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .strike-value small {
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .symbol-cell {
+      color: var(--accent);
+      font-weight: 900;
+      text-align: left;
+    }
+
+    .position-cell {
+      font-weight: 900;
+      text-align: right;
+    }
+
+    .position-cell.positive-position {
+      color: var(--green);
+    }
+
+    .position-cell.negative-position {
+      color: var(--red);
+    }
+
+    .order-quantity {
+      margin-left: 3px;
+      color: var(--orange);
+      font-weight: 900;
+    }
+
+    .price-cell {
+      color: var(--yellow);
+    }
+
+    .wide-spread {
+      color: var(--orange);
+    }
+
+    .order-cell {
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      font-weight: inherit;
+      line-height: inherit;
+      text-align: inherit;
+    }
+
+    .order-cell:hover,
+    .order-cell:focus-visible {
+      color: #ffffff;
+      text-decoration: underline;
+      outline: none;
+    }
+
+    .last-cell {
+      color: #17a8ff;
+    }
+
+    .positive {
+      color: var(--green);
+    }
+
+    .negative {
+      color: var(--red);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .error-box {
+      padding: 10px;
+      background: #2a1d22;
+      border: 1px solid #813342;
+      border-radius: 6px;
+      color: #ffd6dd;
+    }
+
+    .order-ticket {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: 160px 220px 140px 150px 160px 1fr 112px 112px 104px;
+      gap: 8px;
+      align-items: end;
+      min-height: 54px;
+      padding: 7px 12px;
+      background: #111923;
+      border-top: 1px solid #40516a;
+      box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.32);
+    }
+
+    .ticket-field label {
+      display: block;
+      margin-bottom: 3px;
+      color: #c6d0dc;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .ticket-field input,
+    .ticket-field select {
+      width: 100%;
+      height: 28px;
+      padding: 4px 8px;
+      border: 1px solid #2f80ed;
+      border-radius: 4px;
+      background: #223149;
+      color: #eef3f8;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .ticket-field input[readonly] {
+      color: #dbe5f0;
+      background: #1d2a3d;
+    }
+
+    .ticket-actions {
+      display: contents;
+    }
+
+    .ticket-button {
+      height: 28px;
+      border-radius: 4px;
+      background: transparent;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .buy-button {
+      border: 1px solid #14a638;
+      color: #18c244;
+    }
+
+    .sell-button {
+      border: 1px solid #ff3131;
+      color: #ff3b3b;
+    }
+
+    .clear-button {
+      border: 1px solid #d7dde6;
+      color: #f2f5f9;
+    }
+
+    .ticket-side {
+      height: 28px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      background: #0b1422;
+      color: #40a9ff;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .ant-input,
+    .ant-select-selector {
+      background: #101721 !important;
+      border-color: #42516a !important;
+      color: #eef3f8 !important;
+    }
+
+    .ant-btn-sm,
+    .ant-input-affix-wrapper-sm,
+    .ant-select-single.ant-select-sm {
+      font-size: 12px;
+    }
+
+    .ant-collapse-content > .ant-collapse-content-box {
+      padding: 0 !important;
+    }
+
+    .option-count-tag {
+      width: 90px;
+      margin: 0;
+      text-align: center;
+      line-height: 18px;
+    }
+
+    .ant-input::placeholder {
+      color: #8290a4;
+    }
+
+    .ant-empty-description,
+    .ant-spin-text {
+      color: var(--muted) !important;
+    }
+
+    @media (max-width: 760px) {
+      body {
+        min-width: 760px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+      }
+
+      .summary {
+        grid-template-columns: repeat(2, minmax(150px, 1fr));
+      }
+
+      .collapse-label {
+        grid-template-columns: 72px 1fr 66px 66px 88px;
+      }
+
+      .order-ticket {
+        grid-template-columns: 140px 180px 120px 120px 140px 1fr 92px 92px 92px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/antd@5.21.6/dist/antd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ant-design/icons@5.4.0/dist/index.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.7/babel.min.js"></script>
+  <script type="text/babel">
+    const { useEffect, useMemo, useRef, useState } = React;
+    const { Button, Collapse, ConfigProvider, Empty, Input, Select, Space, Spin, Table, Tag, theme } = antd;
+    const { ReloadOutlined, SearchOutlined } = icons;
+
+    const ROOT_TO_UNDERLYING = {
+      GFG: { symbol: 'GGAL', name: 'Grupo Financiero Galicia' },
+      GFC: { symbol: 'GGAL', name: 'Grupo Financiero Galicia' },
+      GFA: { symbol: 'GGAL', name: 'Grupo Financiero Galicia' },
+      YPF: { symbol: 'YPFD', name: 'YPF' },
+      PAMP: { symbol: 'PAMP', name: 'Pampa Energia' },
+      COME: { symbol: 'COME', name: 'Sociedad Comercial del Plata' },
+      CRES: { symbol: 'CRES', name: 'Cresud' },
+      EDN: { symbol: 'EDN', name: 'Edenor' },
+      TXAR: { symbol: 'TXAR', name: 'Ternium Argentina' },
+      TXA: { symbol: 'TXAR', name: 'Ternium Argentina' },
+      TRAN: { symbol: 'TRAN', name: 'Transener' },
+      TRA: { symbol: 'TRAN', name: 'Transener' },
+      TGS: { symbol: 'TGSU2', name: 'Transportadora de Gas del Sur' },
+      BMA: { symbol: 'BMA', name: 'Banco Macro' },
+      BYM: { symbol: 'BYMA', name: 'BYMA' },
+      CEC: { symbol: 'CECO2', name: 'Central Costanera' },
+      CEP: { symbol: 'CEPU', name: 'Central Puerto' },
+      COM: { symbol: 'COME', name: 'Sociedad Comercial del Plata' },
+      CRE: { symbol: 'CRES', name: 'Cresud' },
+      LOM: { symbol: 'LOMA', name: 'Loma Negra' },
+      MET: { symbol: 'METR', name: 'Metrogas' },
+      MIR: { symbol: 'MIRG', name: 'Mirgor' },
+      PAM: { symbol: 'PAMP', name: 'Pampa Energia' },
+      TEC: { symbol: 'TECO2', name: 'Telecom Argentina' },
+      ALU: { symbol: 'ALUA', name: 'Aluar' },
+      SUP: { symbol: 'SUPV', name: 'Grupo Supervielle' }
+    };
+
+    const MONTH_CODES = {
+      EN: 'Ene',
+      FE: 'Feb',
+      MR: 'Mar',
+      AB: 'Abr',
+      MY: 'May',
+      JN: 'Jun',
+      JL: 'Jul',
+      AG: 'Ago',
+      G: 'Ago',
+      SE: 'Sep',
+      OC: 'Oct',
+      O: 'Oct',
+      NO: 'Nov',
+      DI: 'Dic'
+    };
+
+    MONTH_CODES.L = 'Jul';
+
+    function getItems(payload) {
+      const data = payload?.data ?? payload;
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.titulos)) return data.titulos;
+      if (Array.isArray(data?.items)) return data.items;
+      if (Array.isArray(data?.data)) return data.data;
+      return [];
+    }
+
+    function getPortfolioItems(payload) {
+      const data = payload?.data ?? payload;
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.activos)) return data.activos;
+      if (Array.isArray(data?.items)) return data.items;
+      return [];
+    }
+
+    function getOrderItems(payload) {
+      const data = payload?.data ?? payload;
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.operaciones)) return data.operaciones;
+      if (Array.isArray(data?.items)) return data.items;
+      return [];
+    }
+
+    function cleanSymbol(value) {
+      return String(value || '').toUpperCase().replace(/\s+-\s+.*$/, '').replace(/\s/g, '');
+    }
+
+    function parseOptionSymbol(rawSymbol) {
+      const symbol = cleanSymbol(rawSymbol);
+      const match = symbol.match(/^([A-Z]{2,5})([CV])(\d+(?:[.,]\d+)?)(?:\.?)([A-Z]{1,2})?/);
+      if (!match) return { root: symbol.slice(0, 4), optionType: null, strike: null, monthCode: null };
+
+      return {
+        root: match[1],
+        optionType: match[2] === 'C' ? 'CALL' : 'PUT',
+        strike: Number(String(match[3]).replace(',', '.')),
+        monthCode: match[4] || null
+      };
+    }
+
+    function numberValue(...values) {
+      for (const value of values) {
+        if (value === null || value === undefined || value === '') continue;
+        const numeric = Number(String(value ?? '').replace(',', '.'));
+        if (Number.isFinite(numeric)) return numeric;
+      }
+      return null;
+    }
+
+    function formatNumber(value, options = {}) {
+      const numeric = numberValue(value);
+      if (numeric === null) return '-';
+      return new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: options.minimumFractionDigits ?? 0,
+        maximumFractionDigits: options.maximumFractionDigits ?? 3
+      }).format(numeric);
+    }
+
+    function formatPercent(value) {
+      const numeric = numberValue(value);
+      if (numeric === null) return '-';
+      return `${formatNumber(numeric, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
+    }
+
+    function parseLocaleNumber(value) {
+      if (value === null || value === undefined || value === '') return null;
+      const normalized = String(value).replace(/\./g, '').replace(',', '.');
+      const numeric = Number(normalized);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    function priceKey(value) {
+      const numeric = numberValue(value);
+      if (numeric === null) return '';
+      return numeric.toFixed(3);
+    }
+
+    function spreadPercent(bid, ask) {
+      const bidValue = numberValue(bid);
+      const askValue = numberValue(ask);
+      if (bidValue === null || askValue === null || bidValue <= 0 || askValue <= 0 || askValue < bidValue) return null;
+      return ((askValue - bidValue) / bidValue) * 100;
+    }
+
+    function getPuntas(item) {
+      const puntas = Array.isArray(item?.puntas) ? item.puntas[0] : item?.puntas;
+      return puntas || {};
+    }
+
+    function getExpiration(item, parsed) {
+      if (item.fechaVencimiento) {
+        const date = dayjs(item.fechaVencimiento);
+        if (date.isValid()) return date.format('DD/MMM');
+      }
+      return MONTH_CODES[parsed.monthCode] || parsed.monthCode || '-';
+    }
+
+    function normalizeOption(item, index) {
+      const parsed = parseOptionSymbol(item.simbolo);
+      const puntas = getPuntas(item);
+      const bid = numberValue(puntas.precioCompra, item.precioCompra, item.compra);
+      const ask = numberValue(puntas.precioVenta, item.precioVenta, item.venta);
+      const typeText = String(item.tipoOpcion || item.tipo || '').toUpperCase();
+      const optionType = parsed.optionType || (typeText.includes('PUT') || typeText.includes('VENTA') ? 'PUT' : 'CALL');
+      const rootInfo = ROOT_TO_UNDERLYING[parsed.root] || {};
+      const underlying = String(item.simboloSubyacente || item.subyacente || rootInfo.symbol || parsed.root || 'OTROS').toUpperCase();
+
+      return {
+        key: `${cleanSymbol(item.simbolo)}-${index}`,
+        raw: item,
+        symbol: cleanSymbol(item.simbolo),
+        underlying,
+        underlyingName: rootInfo.name || item.descripcionSubyacente || item.descripcionTitulo || item.descripcion || underlying,
+        optionType,
+        strike: numberValue(item.precioEjercicio, item.strike, parsed.strike),
+        expiration: getExpiration(item, parsed),
+        bidSize: numberValue(puntas.cantidadCompra, item.cantidadCompra, item.volumenCompra),
+        bid,
+        ask,
+        spread: spreadPercent(bid, ask),
+        askSize: numberValue(puntas.cantidadVenta, item.cantidadVenta, item.volumenVenta),
+        last: numberValue(item.ultimoPrecio, item.ultimo, item.cierre),
+        change: numberValue(item.variacionPorcentual, item.variacion, item.var),
+        volume: numberValue(item.volumen, item.volumenNominal),
+        close: numberValue(item.ultimoCierre, item.cierre),
+        impliedVol: numberValue(item.volatilidadImplicita, item.volImp, item.volatilidad),
+        market: item.mercado || '-'
+      };
+    }
+
+    function groupOptions(items) {
+      const groups = new Map();
+
+      items.map(normalizeOption).forEach((option) => {
+        if (!groups.has(option.underlying)) {
+          groups.set(option.underlying, {
+            key: option.underlying,
+            symbol: option.underlying,
+            name: option.underlyingName,
+            calls: [],
+            puts: []
+          });
+        }
+
+        const group = groups.get(option.underlying);
+        if (group.name === group.symbol && option.underlyingName) group.name = option.underlyingName;
+        if (option.optionType === 'PUT') group.puts.push(option);
+        else group.calls.push(option);
+      });
+
+      return Array.from(groups.values())
+        .map((group) => ({
+          ...group,
+          calls: group.calls.sort((a, b) => (a.strike ?? 0) - (b.strike ?? 0)),
+          puts: group.puts.sort((a, b) => (a.strike ?? 0) - (b.strike ?? 0))
+        }))
+        .sort((a, b) => a.symbol.localeCompare(b.symbol));
+    }
+
+    function buildPositionsBySymbol(portfolioItems) {
+      const positions = {};
+
+      for (const item of portfolioItems) {
+        const symbol = cleanSymbol(item.titulo?.simbolo || item.simbolo || item.symbol);
+        if (!symbol) continue;
+        const available = numberValue(
+          item.parking?.disponibleInmediato,
+          item.disponible,
+          item.cantidadDisponible,
+          item.cantidad
+        );
+        positions[symbol] = (positions[symbol] || 0) + (available || 0);
+      }
+
+      return positions;
+    }
+
+    function orderSide(order) {
+      const tipo = String(order.tipo || order.operacion || order.tipoOperacion || '').toLowerCase();
+      if (tipo.includes('venta') || tipo.includes('vender')) return 'venta';
+      if (tipo.includes('compra') || tipo.includes('comprar')) return 'compra';
+      return '';
+    }
+
+    function buildOrdersBySymbolSidePrice(orderItems) {
+      const orders = {};
+
+      for (const order of orderItems) {
+        const symbol = cleanSymbol(order.simbolo || order.titulo?.simbolo);
+        const side = orderSide(order);
+        const key = priceKey(order.precio);
+        if (!symbol || !side || !key) continue;
+
+        const total = numberValue(order.cantidad);
+        const operated = numberValue(order.cantidadOperada);
+        const pending = total === null ? null : total - (operated || 0);
+        const quantity = pending ?? total ?? 0;
+        if (!quantity) continue;
+
+        const mapKey = `${symbol}|${side}|${key}`;
+        orders[mapKey] = (orders[mapKey] || 0) + quantity;
+      }
+
+      return orders;
+    }
+
+    function buildChainRows(group) {
+      const rowsByStrike = new Map();
+
+      function keyFor(option) {
+        return option.strike === null ? `z-${option.symbol}` : String(option.strike);
+      }
+
+      for (const call of group.calls) {
+        const key = keyFor(call);
+        rowsByStrike.set(key, { key, strike: call.strike, expiration: call.expiration, call, put: null });
+      }
+
+      for (const put of group.puts) {
+        const key = keyFor(put);
+        const row = rowsByStrike.get(key) || { key, strike: put.strike, expiration: put.expiration, call: null, put: null };
+        row.put = put;
+        row.expiration = row.expiration || put.expiration;
+        rowsByStrike.set(key, row);
+      }
+
+      return Array.from(rowsByStrike.values()).sort((a, b) => {
+        if (a.strike === null) return 1;
+        if (b.strike === null) return -1;
+        return a.strike - b.strike;
+      });
+    }
+
+    function Value({ value, kind, percent }) {
+      const numeric = numberValue(value);
+      let className = kind || '';
+      if (percent && numeric !== null) className = numeric >= 0 ? 'positive' : 'negative';
+      return <span className={className}>{percent ? formatPercent(value) : formatNumber(value)}</span>;
+    }
+
+    function optionColumn(side, field, title, width, render) {
+      return {
+        title,
+        dataIndex: [side, field],
+        width,
+        render: (_value, row) => {
+          const option = row[side];
+          if (!option) return <span className="muted">-</span>;
+          return render ? render(option[field], option) : <Value value={option[field]} />;
+        }
+      };
+    }
+
+    function priceClass(option) {
+      return option.spread !== null && option.spread > 5 ? 'price-cell wide-spread' : 'price-cell';
+    }
+
+    function SpreadValue({ option }) {
+      if (option.spread === null) return <span className="muted">-</span>;
+      return <span className={option.spread > 5 ? 'wide-spread' : ''}>{formatPercent(option.spread)}</span>;
+    }
+
+    function PositionValue({ option, positionsBySymbol }) {
+      const quantity = positionsBySymbol[option.symbol] || 0;
+      if (!quantity) return <span className="muted">-</span>;
+      const className = quantity > 0 ? 'positive-position' : 'negative-position';
+      return <span className={`position-cell ${className}`}>{formatNumber(quantity)}</span>;
+    }
+
+    function OrderQuantity({ option, side, price, ordersBySymbolSidePrice }) {
+      const quantity = ordersBySymbolSidePrice[`${option.symbol}|${side}|${priceKey(price)}`] || 0;
+      if (!quantity) return null;
+      return <span className="order-quantity">({formatNumber(quantity)})</span>;
+    }
+
+    function OrderCell({ children, className = '', onClick, title }) {
+      return (
+        <button className={`order-cell ${className}`} type="button" onClick={onClick} title={title}>
+          {children}
+        </button>
+      );
+    }
+
+    function ChainTable({ group, onSelectOrder, positionsBySymbol, ordersBySymbolSidePrice }) {
+      const rows = useMemo(() => buildChainRows(group), [group]);
+      const columns = [
+        {
+          title: 'CALL',
+          className: 'group-call',
+          children: [
+            optionColumn('call', 'position', '', 44, (_value, option) => <PositionValue option={option} positionsBySymbol={positionsBySymbol} />),
+            optionColumn('call', 'symbol', 'Especie', 122, (_value, option) => (
+              <OrderCell className="symbol-cell" onClick={() => onSelectOrder(option, 'comprar', option.ask || option.last || option.bid, 'instrumento')}>
+                {option.symbol}
+              </OrderCell>
+            )),
+            optionColumn('call', 'bidSize', 'Vol.C', 72),
+            optionColumn('call', 'bid', 'Compra', 86, (value, option) => (
+              <OrderCell className={priceClass(option)} onClick={() => onSelectOrder(option, 'vender', value, 'compra')}>
+                <Value value={value} />
+                <OrderQuantity option={option} side="compra" price={value} ordersBySymbolSidePrice={ordersBySymbolSidePrice} />
+              </OrderCell>
+            )),
+            optionColumn('call', 'ask', 'Venta', 86, (value, option) => (
+              <OrderCell className={priceClass(option)} onClick={() => onSelectOrder(option, 'comprar', value, 'venta')}>
+                <Value value={value} />
+                <OrderQuantity option={option} side="venta" price={value} ordersBySymbolSidePrice={ordersBySymbolSidePrice} />
+              </OrderCell>
+            )),
+            optionColumn('call', 'spread', 'Spread', 72, (_value, option) => <SpreadValue option={option} />),
+            optionColumn('call', 'askSize', 'Vol.V', 72),
+            optionColumn('call', 'last', 'Ult', 82, (value) => <Value value={value} kind="last-cell" />),
+            optionColumn('call', 'change', 'Var.%', 78, (value) => <Value value={value} percent />),
+            optionColumn('call', 'volume', 'Vol.', 86)
+          ]
+        },
+        {
+          title: 'STRIKE',
+          dataIndex: 'strike',
+          width: 92,
+          className: 'strike-cell',
+          render: (value, row) => (
+            <div className="strike-value">
+              <span>{formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <small>{row.expiration}</small>
+            </div>
+          )
+        },
+        {
+          title: 'PUT',
+          className: 'group-put',
+          children: [
+            optionColumn('put', 'position', '', 44, (_value, option) => <PositionValue option={option} positionsBySymbol={positionsBySymbol} />),
+            optionColumn('put', 'symbol', 'Especie', 122, (_value, option) => (
+              <OrderCell className="symbol-cell" onClick={() => onSelectOrder(option, 'comprar', option.ask || option.last || option.bid, 'instrumento')}>
+                {option.symbol}
+              </OrderCell>
+            )),
+            optionColumn('put', 'bidSize', 'Vol.C', 72),
+            optionColumn('put', 'bid', 'Compra', 86, (value, option) => (
+              <OrderCell className={priceClass(option)} onClick={() => onSelectOrder(option, 'vender', value, 'compra')}>
+                <Value value={value} />
+                <OrderQuantity option={option} side="compra" price={value} ordersBySymbolSidePrice={ordersBySymbolSidePrice} />
+              </OrderCell>
+            )),
+            optionColumn('put', 'ask', 'Venta', 86, (value, option) => (
+              <OrderCell className={priceClass(option)} onClick={() => onSelectOrder(option, 'comprar', value, 'venta')}>
+                <Value value={value} />
+                <OrderQuantity option={option} side="venta" price={value} ordersBySymbolSidePrice={ordersBySymbolSidePrice} />
+              </OrderCell>
+            )),
+            optionColumn('put', 'spread', 'Spread', 72, (_value, option) => <SpreadValue option={option} />),
+            optionColumn('put', 'askSize', 'Vol.V', 72),
+            optionColumn('put', 'last', 'Ult', 82, (value) => <Value value={value} kind="last-cell" />),
+            optionColumn('put', 'change', 'Var.%', 78, (value) => <Value value={value} percent />),
+            optionColumn('put', 'volume', 'Vol.', 86)
+          ]
+        }
+      ];
+
+      return (
+        <Table
+          className="chain-table"
+          columns={columns}
+          dataSource={rows}
+          pagination={false}
+          size="small"
+          bordered
+          scroll={{ x: 1742 }}
+        />
+      );
+    }
+
+    const EMPTY_ORDER_TICKET = {
+      visible: false,
+      side: 'comprar',
+      symbol: '',
+      price: '',
+      quantity: '',
+      source: '',
+      market: 'BCBA',
+      plazo: 'CI'
+    };
+
+    function App() {
+      const [items, setItems] = useState([]);
+      const [portfolioItems, setPortfolioItems] = useState([]);
+      const [orderItems, setOrderItems] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState('');
+      const [query, setQuery] = useState('');
+      const [panel, setPanel] = useState('Todas');
+      const [receivedAt, setReceivedAt] = useState(null);
+      const [activeKeys, setActiveKeys] = useState([]);
+      const [orderTicket, setOrderTicket] = useState(EMPTY_ORDER_TICKET);
+      const quantityRef = useRef(null);
+      const groups = useMemo(() => groupOptions(items), [items]);
+      const positionsBySymbol = useMemo(() => buildPositionsBySymbol(portfolioItems), [portfolioItems]);
+      const ordersBySymbolSidePrice = useMemo(() => buildOrdersBySymbolSidePrice(orderItems), [orderItems]);
+
+      async function loadOptions(nextPanel = panel) {
+        setLoading(true);
+        setError('');
+
+        try {
+          const params = new URLSearchParams({ instrumento: 'Opciones', panel: nextPanel, pais: 'Argentina' });
+          const [optionsResult, portfolioResult, ordersResult] = await Promise.allSettled([
+            fetch(`/api/options?${params.toString()}`).then(async (response) => ({ response, json: await response.json() })),
+            fetch('/api/portfolio?pais=Argentina').then(async (response) => ({ response, json: await response.json() })),
+            fetch('/api/orders?estado=pendientes&pais=Argentina').then(async (response) => ({ response, json: await response.json() }))
+          ]);
+
+          if (optionsResult.status !== 'fulfilled' || !optionsResult.value.response.ok || !optionsResult.value.json.ok) {
+            throw new Error(optionsResult.value?.json?.error || 'No se pudo consultar IOL.');
+          }
+
+          setItems(getItems(optionsResult.value.json));
+          setReceivedAt(optionsResult.value.json.receivedAt);
+
+          if (portfolioResult.status === 'fulfilled' && portfolioResult.value.response.ok && portfolioResult.value.json.ok) {
+            setPortfolioItems(getPortfolioItems(portfolioResult.value.json));
+          } else {
+            setPortfolioItems([]);
+          }
+
+          if (ordersResult.status === 'fulfilled' && ordersResult.value.response.ok && ordersResult.value.json.ok) {
+            setOrderItems(getOrderItems(ordersResult.value.json));
+          } else {
+            setOrderItems([]);
+          }
+        } catch (err) {
+          setError(String(err.message || err));
+          setItems([]);
+          setPortfolioItems([]);
+          setOrderItems([]);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      useEffect(() => {
+        loadOptions();
+      }, []);
+
+      useEffect(() => {
+        if (!activeKeys.length && groups.length > 0) {
+          setActiveKeys([groups[0].symbol]);
+        }
+      }, [groups, activeKeys.length]);
+
+      function scrollToTicker(symbol) {
+        setQuery('');
+        setActiveKeys((keys) => Array.from(new Set([...keys, symbol])));
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            document.getElementById(`ticker-section-${symbol}`)?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start'
+            });
+          });
+        });
+      }
+
+      function selectOrder(option, side, price, source) {
+        const numericPrice = numberValue(price);
+
+        setOrderTicket((current) => ({
+          ...current,
+          visible: true,
+          side,
+          symbol: option.symbol,
+          price: numericPrice === null ? '' : formatNumber(numericPrice, { minimumFractionDigits: 3, maximumFractionDigits: 3 }),
+          quantity: '',
+          source,
+          market: option.market || 'BCBA',
+          plazo: option.raw?.plazo?.toUpperCase?.() || 'CI'
+        }));
+
+        window.requestAnimationFrame(() => {
+          quantityRef.current?.focus();
+          quantityRef.current?.select();
+        });
+      }
+
+      function updateOrderField(field, value) {
+        setOrderTicket((current) => ({ ...current, [field]: value }));
+      }
+
+      const ticketAmount = useMemo(() => {
+        const price = numberValue(String(orderTicket.price).replace(/\./g, '').replace(',', '.'));
+        const quantity = numberValue(String(orderTicket.quantity).replace(/\./g, '').replace(',', '.'));
+        if (price === null || quantity === null) return '';
+        return formatNumber(price * quantity, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }, [orderTicket.price, orderTicket.quantity]);
+
+      const filteredGroups = useMemo(() => {
+        const term = query.trim().toUpperCase();
+        if (!term) return groups;
+        return groups.filter((group) => {
+          const haystack = [group.symbol, group.name, ...group.calls.map((item) => item.symbol), ...group.puts.map((item) => item.symbol)]
+            .join(' ')
+            .toUpperCase();
+          return haystack.includes(term);
+        });
+      }, [groups, query]);
+
+      const collapseItems = filteredGroups.map((group) => ({
+        key: group.symbol,
+        label: (
+          <div className="collapse-label" id={`ticker-section-${group.symbol}`}>
+            <span className="symbol">{group.symbol}</span>
+            <span className="description">{group.name}</span>
+            <span className="count">{group.calls.length} calls</span>
+            <span className="count">{group.puts.length} puts</span>
+            <Tag className="option-count-tag" color="blue">{group.calls.length + group.puts.length} opciones</Tag>
+          </div>
+        ),
+        children: (
+          <ChainTable
+            group={group}
+            onSelectOrder={selectOrder}
+            positionsBySymbol={positionsBySymbol}
+            ordersBySymbolSidePrice={ordersBySymbolSidePrice}
+          />
+        )
+      }));
+
+      const tickerStrip = groups.map((group) => group.symbol);
+
+      return (
+        <ConfigProvider
+          theme={{
+            algorithm: theme.darkAlgorithm,
+            token: {
+              colorPrimary: '#1677ff',
+              borderRadius: 6,
+              fontFamily: 'Inter, system-ui, sans-serif'
+            }
+          }}
+        >
+          <main className="page">
+            <header className="topbar">
+              <div className="brand">
+                <h1>Cotizaciones</h1>
+                <span>Opciones BYMA via IOL</span>
+              </div>
+              <div className="toolbar">
+                <Input
+                  allowClear
+                  size="small"
+                  prefix={<SearchOutlined />}
+                  placeholder="Ticker o especie"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  style={{ width: 240 }}
+                />
+                <Select
+                  size="small"
+                  value={panel}
+                  onChange={(value) => {
+                    setPanel(value);
+                    loadOptions(value);
+                  }}
+                  options={[
+                    { value: 'Todas', label: 'Todas' },
+                    { value: 'Panel General', label: 'Panel General' }
+                  ]}
+                  style={{ width: 160 }}
+                />
+                <Button size="small" icon={<ReloadOutlined />} type="primary" onClick={() => loadOptions()} loading={loading}>
+                  Actualizar
+                </Button>
+              </div>
+            </header>
+
+            <div className="ticker-strip">
+              {tickerStrip.map((ticker) => (
+                <button className="ticker-chip" key={ticker} type="button" onClick={() => scrollToTicker(ticker)}>
+                  {ticker}
+                </button>
+              ))}
+            </div>
+
+            <section className="content">
+              <div className="summary">
+                <div className="metric">
+                  <div className="metric-label">Subyacentes</div>
+                  <div className="metric-value">{groups.length}</div>
+                </div>
+                <div className="metric">
+                  <div className="metric-label">Opciones</div>
+                  <div className="metric-value">{items.length}</div>
+                </div>
+                <div className="metric">
+                  <div className="metric-label">Panel</div>
+                  <div className="metric-value">{panel}</div>
+                </div>
+                <div className="metric">
+                  <div className="metric-label">Actualizado</div>
+                  <div className="metric-value">{receivedAt ? dayjs(receivedAt).format('HH:mm:ss') : '-'}</div>
+                </div>
+              </div>
+
+              {error && <div className="error-box">{error}</div>}
+              {loading && <Spin tip="Consultando IOL..." size="large" fullscreen={false} />}
+              {!loading && !error && collapseItems.length === 0 && <Empty description="Sin opciones para mostrar" />}
+              {!loading && !error && collapseItems.length > 0 && (
+                <Collapse
+                  className="market-collapse"
+                  activeKey={activeKeys}
+                  onChange={(keys) => setActiveKeys(Array.isArray(keys) ? keys : [keys])}
+                  expandIconPosition="start"
+                  items={collapseItems}
+                  size="small"
+                />
+              )}
+            </section>
+
+            {orderTicket.visible && (
+              <div className="order-ticket">
+                <div className="ticket-field">
+                  <label>Mercado</label>
+                  <input value={`${orderTicket.market} / ${orderTicket.plazo}`} readOnly />
+                </div>
+                <div className="ticket-field">
+                  <label>Instrumento</label>
+                  <input value={orderTicket.symbol} readOnly />
+                </div>
+                <div className="ticket-field">
+                  <label>Precio</label>
+                  <input
+                    value={orderTicket.price}
+                    onChange={(event) => updateOrderField('price', event.target.value)}
+                  />
+                </div>
+                <div className="ticket-field">
+                  <label>Cantidad</label>
+                  <input
+                    ref={quantityRef}
+                    value={orderTicket.quantity}
+                    onChange={(event) => updateOrderField('quantity', event.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="ticket-field">
+                  <label>Monto</label>
+                  <input value={ticketAmount} readOnly />
+                </div>
+                <div>
+                  <label>&nbsp;</label>
+                  <div className="ticket-side">{orderTicket.side} desde {orderTicket.source}</div>
+                </div>
+                <div className="ticket-actions">
+                  <button className="ticket-button buy-button" type="button" onClick={() => updateOrderField('side', 'comprar')}>
+                    Comprar
+                  </button>
+                  <button className="ticket-button sell-button" type="button" onClick={() => updateOrderField('side', 'vender')}>
+                    Vender
+                  </button>
+                  <button className="ticket-button clear-button" type="button" onClick={() => setOrderTicket(EMPTY_ORDER_TICKET)}>
+                    Limpiar
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+        </ConfigProvider>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const STORE_PATH = path.join(DATA_DIR, 'strategies.json');
+const STRATEGY_ROWS_PER_SIDE = 12;
+const HISTORY_ROWS_PER_SIDE = 24;
+
+async function ensureStore() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  try {
+    await fs.access(STORE_PATH);
+  } catch {
+    await fs.writeFile(STORE_PATH, JSON.stringify({ strategies: {} }, null, 2));
+  }
+}
+
+async function readStore() {
+  await ensureStore();
+  const raw = await fs.readFile(STORE_PATH, 'utf8');
+  return JSON.parse(raw || '{"strategies":{}}');
+}
+
+async function writeStore(store) {
+  await ensureStore();
+  await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2));
+}
+
+function makeId() {
+  return crypto.randomBytes(4).toString('hex');
+}
+
+function makeDefaultLegs() {
+  const calls = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => ({
+    id: `call-${index + 1}`,
+    type: 'CALL',
+    quantity: '',
+    symbol: '',
+    premium: '',
+    manualPrice: ''
+  }));
+  const puts = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => ({
+    id: `put-${index + 1}`,
+    type: 'PUT',
+    quantity: '',
+    symbol: '',
+    premium: '',
+    manualPrice: ''
+  }));
+  return [...calls, ...puts];
+}
+
+function normalizeLegs(inputLegs) {
+  const incoming = Array.isArray(inputLegs) ? inputLegs : [];
+  const fallback = makeDefaultLegs();
+  const byId = new Map(incoming.map((leg) => [leg.id, leg]));
+  const legacyCalls = incoming.filter((leg) => String(leg.type || '').toUpperCase() === 'CALL' && !String(leg.id || '').startsWith('call-'));
+  const legacyPuts = incoming.filter((leg) => String(leg.type || '').toUpperCase() === 'PUT' && !String(leg.id || '').startsWith('put-'));
+
+  return fallback.map((emptyLeg, index) => {
+    const legacy = emptyLeg.type === 'CALL' ? legacyCalls.shift() : legacyPuts.shift();
+    const leg = byId.get(emptyLeg.id) || legacy || emptyLeg;
+    return {
+      id: emptyLeg.id,
+      type: emptyLeg.type,
+      quantity: leg.quantity ?? '',
+      symbol: String(leg.symbol || leg.base || '').toUpperCase(),
+      premium: leg.premium ?? '',
+      manualPrice: leg.manualPrice ?? ''
+    };
+  });
+}
+
+function normalizeHistory(inputHistory) {
+  const incoming = Array.isArray(inputHistory) ? inputHistory : [];
+  const byType = {
+    CALL: incoming.filter((item) => String(item.type || '').toUpperCase() === 'CALL'),
+    PUT: incoming.filter((item) => String(item.type || '').toUpperCase() === 'PUT'),
+    ACC: incoming.filter((item) => String(item.type || '').toUpperCase() === 'ACC')
+  };
+  const calls = Array.from({ length: Math.max(HISTORY_ROWS_PER_SIDE, byType.CALL.length) }, (_item, index) => {
+    const item = byType.CALL[index] || {};
+    return {
+      id: item.id || `history-call-${index + 1}`,
+      date: item.date || '',
+      type: 'CALL',
+      quantity: item.quantity ?? '',
+      symbol: String(item.symbol || item.base || '').toUpperCase(),
+      premium: item.premium ?? '',
+      manualPrice: item.manualPrice ?? ''
+    };
+  });
+  const puts = Array.from({ length: Math.max(HISTORY_ROWS_PER_SIDE, byType.PUT.length) }, (_item, index) => {
+    const item = byType.PUT[index] || {};
+    return {
+      id: item.id || `history-put-${index + 1}`,
+      date: item.date || '',
+      type: 'PUT',
+      quantity: item.quantity ?? '',
+      symbol: String(item.symbol || item.base || '').toUpperCase(),
+      premium: item.premium ?? '',
+      manualPrice: item.manualPrice ?? ''
+    };
+  });
+  const acc = byType.ACC.map((item, index) => ({
+    id: item.id || `history-acc-${index + 1}`,
+    date: item.date || '',
+    type: 'ACC',
+    quantity: item.quantity ?? '',
+    symbol: String(item.symbol || item.base || '').toUpperCase(),
+    premium: item.premium ?? '',
+    manualPrice: item.manualPrice ?? ''
+  }));
+  return [...calls, ...puts, ...acc];
+}
+
+function normalizeStrategy(input = {}) {
+  return {
+    name: input.name || 'Estrategia sin nombre',
+    underlying: String(input.underlying || 'GGAL').toUpperCase(),
+    monthCode: String(input.monthCode || 'AG').toUpperCase(),
+    expiration: input.expiration || null,
+    spot: input.spot ?? null,
+    riskFreeRate: input.riskFreeRate ?? 0.125,
+    volatility: input.volatility ?? 0.4,
+    useAutoIv: Boolean(input.useAutoIv),
+    legs: normalizeLegs(input.legs),
+    history: normalizeHistory(input.history)
+  };
+}
+
+export async function createStrategy(input = {}) {
+  const store = await readStore();
+  let id = makeId();
+  while (store.strategies[id]) id = makeId();
+
+  const now = new Date().toISOString();
+  const strategy = {
+    id,
+    ...normalizeStrategy(input),
+    createdAt: now,
+    updatedAt: now
+  };
+
+  store.strategies[id] = strategy;
+  await writeStore(store);
+  return strategy;
+}
+
+export async function getStrategy(id) {
+  const store = await readStore();
+  const existing = store.strategies[id];
+  if (!existing) return null;
+  return {
+    ...existing,
+    ...normalizeStrategy(existing),
+    id,
+    createdAt: existing.createdAt,
+    updatedAt: existing.updatedAt
+  };
+}
+
+export async function updateStrategy(id, input = {}) {
+  const store = await readStore();
+  const existing = store.strategies[id];
+  if (!existing) {
+    const error = new Error(`No existe estrategia ${id}.`);
+    error.status = 404;
+    throw error;
+  }
+
+  const strategy = {
+    ...existing,
+    ...normalizeStrategy({ ...existing, ...input }),
+    id,
+    createdAt: existing.createdAt,
+    updatedAt: new Date().toISOString()
+  };
+
+  store.strategies[id] = strategy;
+  await writeStore(store);
+  return strategy;
+}

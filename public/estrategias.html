@@ -1,0 +1,1409 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Estrategias de Opciones</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.21.6/dist/reset.css" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101721;
+      --panel: #172131;
+      --panel-2: #202b3b;
+      --line: #334259;
+      --text: #eef3f8;
+      --muted: #98a7b8;
+      --blue: #2f93ff;
+      --yellow: #f2dd22;
+      --green: #20c65a;
+      --red: #ff4d4f;
+      --orange: #ff9f1c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 1180px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .page {
+      min-height: 100vh;
+      background: linear-gradient(180deg, #151f2d 0, #0f1620 100%);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 56px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #182232;
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .brand span {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .content {
+      padding: 14px 16px 28px;
+    }
+
+    .landing {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 16px;
+      align-items: stretch;
+      min-height: calc(100vh - 84px);
+    }
+
+    .hero {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+      padding: 44px;
+      background:
+        linear-gradient(90deg, rgba(16, 23, 33, 0.18), rgba(16, 23, 33, 0.92)),
+        url("https://images.unsplash.com/photo-1642790551116-18e150f248e5?auto=format&fit=crop&w=1800&q=80") center / cover;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .hero h2 {
+      max-width: 720px;
+      margin: 0;
+      color: #fff;
+      font-size: 46px;
+      line-height: 1.04;
+      font-weight: 950;
+    }
+
+    .hero p {
+      max-width: 620px;
+      margin: 0;
+      color: #d6e1ee;
+      font-size: 17px;
+      line-height: 1.45;
+      font-weight: 600;
+    }
+
+    .landing-panel {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .strategy-grid {
+      display: grid;
+      grid-template-columns: minmax(560px, 1fr) 420px;
+      gap: 12px;
+    }
+
+    .spreadsheet-grid {
+      display: grid;
+      grid-template-columns: minmax(620px, 1.35fr) minmax(360px, 0.65fr) minmax(520px, 0.9fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .panel {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      background: #202b3b;
+    }
+
+    .panel-title {
+      color: #fff;
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .metric {
+      min-height: 58px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      margin-top: 4px;
+      color: #fff;
+      font-size: 19px;
+      font-weight: 900;
+    }
+
+    .positive { color: var(--green); }
+    .negative { color: var(--red); }
+    .muted { color: var(--muted); }
+    .symbol { color: var(--blue); font-weight: 900; }
+    .payoff-wrap { padding: 10px; }
+
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(360px, 1fr));
+      gap: 12px;
+      padding: 10px;
+    }
+
+    .history-block-title {
+      padding: 5px 8px;
+      border: 1px solid #111;
+      border-bottom: 0;
+      background: #366291;
+      color: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .input-grid-wrap {
+      overflow: auto;
+      outline: none;
+    }
+
+    .input-grid {
+      width: 100%;
+      min-width: 420px;
+      border-collapse: collapse;
+      background: #f2f2f2;
+      color: #050505;
+      font-family: Arial, Helvetica, sans-serif;
+      table-layout: fixed;
+    }
+
+    .input-grid th {
+      height: 24px;
+      padding: 4px 5px;
+      border: 1px solid #111;
+      background: #366291;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .input-grid td {
+      height: 28px;
+      padding: 0;
+      border: 1px solid #222;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.05;
+      user-select: none;
+    }
+
+    .input-grid .type-cell {
+      width: 62px;
+      padding: 4px 6px;
+      text-align: center;
+    }
+
+    .input-grid .type-call,
+    .input-grid .type-call .type-cell {
+      background: #ffffb3;
+    }
+
+    .input-grid .type-put,
+    .input-grid .type-put .type-cell {
+      background: #e5c0ef;
+    }
+
+    .input-grid .edit-cell {
+      position: relative;
+      background: #b8dfe8;
+    }
+
+    .input-grid .edit-cell.selected {
+      box-shadow: inset 0 0 0 2px #1f6feb;
+      background: #a8d4df;
+    }
+
+    .input-grid .edit-cell.active {
+      box-shadow: inset 0 0 0 2px #050505;
+    }
+
+    .input-grid input {
+      width: 100%;
+      height: 26px;
+      padding: 2px 5px;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: #050505;
+      font: inherit;
+      text-align: right;
+    }
+
+    .input-grid input.symbol-input {
+      text-align: left;
+    }
+
+    .payoff-chart {
+      width: 100%;
+      height: 240px;
+      border: 1px solid #273449;
+      border-radius: 6px;
+      background: #111923;
+    }
+
+    .chain-table .ant-table,
+    .legs-table .ant-table {
+      background: var(--panel);
+      color: var(--text);
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-thead > tr > th,
+    .legs-table.ant-table-wrapper .ant-table-thead > tr > th {
+      padding: 5px 7px !important;
+      background: #515b68 !important;
+      border-color: #798391 !important;
+      color: #fff !important;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr > td,
+    .legs-table.ant-table-wrapper .ant-table-tbody > tr > td {
+      padding: 4px 7px !important;
+      background: #1a2433;
+      border-color: #303d50;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .chain-table.ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > td,
+    .legs-table.ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > td {
+      background: #202b3b;
+    }
+
+    .sheet-table.ant-table-wrapper .ant-table {
+      background: #f2f2f2;
+      color: #080808;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .sheet-table.ant-table-wrapper .ant-table-thead > tr > th {
+      padding: 4px 5px !important;
+      background: #366291 !important;
+      border: 1px solid #111 !important;
+      color: #fff !important;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.05;
+      text-align: center;
+    }
+
+    .sheet-table.ant-table-wrapper .ant-table-tbody > tr > td {
+      height: 24px;
+      padding: 2px 5px !important;
+      border: 1px solid #222;
+      background: #f8f8f8;
+      color: #050505;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.05;
+      text-align: right;
+    }
+
+    .sheet-table .sheet-type-call {
+      background: #ffffb3 !important;
+    }
+
+    .sheet-table .sheet-type-put {
+      background: #e5c0ef !important;
+    }
+
+    .sheet-table .sheet-input {
+      background: #b8dfe8 !important;
+    }
+
+    .sheet-table .sheet-calc {
+      background: #ffffb3 !important;
+    }
+
+    .sheet-table .sheet-base-selected {
+      display: inline-block;
+      padding: 3px 5px;
+      background: #050505;
+      color: #fff;
+      line-height: 1;
+    }
+
+    .sheet-table .sim-negative {
+      background: #f1999c !important;
+    }
+
+    .sheet-table .sim-warn {
+      background: #ffffb3 !important;
+    }
+
+    .sheet-table .sim-positive {
+      background: #c7e7c8 !important;
+    }
+
+    .sheet-table .sim-zero {
+      background: #b8cff0 !important;
+    }
+
+    .sheet-table .result-cell {
+      background: #f0f0f0 !important;
+      color: #3b6f70 !important;
+      font-weight: 900;
+    }
+
+    .sheet-table .result-negative {
+      color: #ff1010 !important;
+    }
+
+    .sheet-table .result-positive {
+      color: #3b6f70 !important;
+    }
+
+    .sheet-table .call-side {
+      background: #ffffb3 !important;
+      text-align: center !important;
+    }
+
+    .sheet-table .put-side {
+      background: #e5c0ef !important;
+      text-align: center !important;
+    }
+
+    .sheet-table .acc-side {
+      background: #91bd9e !important;
+      text-align: center !important;
+    }
+
+    .sheet-table .base-side {
+      background: #c4c4c4 !important;
+    }
+
+    .sheet-table .vi-cell {
+      background: #efefef !important;
+      color: #355f60 !important;
+    }
+
+    .sheet-table .ant-input,
+    .sheet-table .ant-input-number,
+    .sheet-table .ant-input-number-input,
+    .sheet-table .ant-select-selector {
+      height: 22px !important;
+      min-height: 22px !important;
+      background: transparent !important;
+      border-color: transparent !important;
+      color: #050505 !important;
+      font-size: 12px !important;
+      font-weight: 900 !important;
+      box-shadow: none !important;
+    }
+
+    .sheet-title {
+      padding: 5px 8px;
+      background: #366291;
+      border: 2px solid #111;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 950;
+      text-align: center;
+    }
+
+    .ant-input,
+    .ant-input-number,
+    .ant-input-number-input,
+    .ant-select-selector {
+      background: #101721 !important;
+      border-color: #42516a !important;
+      color: #eef3f8 !important;
+    }
+
+    .ant-input::placeholder { color: #7f8ea2; }
+    .ant-empty-description,
+    .ant-spin-text { color: var(--muted) !important; }
+
+    @media (max-width: 900px) {
+      body { min-width: 900px; }
+      .landing { grid-template-columns: 1fr; }
+      .strategy-grid { grid-template-columns: 1fr; }
+      .spreadsheet-grid { grid-template-columns: 1fr; }
+      .history-grid { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/antd@5.21.6/dist/antd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ant-design/icons@5.4.0/dist/index.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.7/babel.min.js"></script>
+  <script type="text/babel">
+    const { useEffect, useMemo, useRef, useState } = React;
+    const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Select, Space, Spin, Switch, Table, Tag, message, theme } = antd;
+    const { ReloadOutlined, SaveOutlined } = icons;
+
+    const UNDERLYINGS = ['GGAL', 'YPFD', 'COME', 'PAMP', 'BMA', 'ALUA', 'SUPV'];
+    const STRATEGY_ROWS_PER_SIDE = 12;
+    const HISTORY_ROWS_PER_SIDE = 24;
+    const MONTHS = [
+      { value: 'AG', label: 'Agosto' },
+      { value: 'OC', label: 'Octubre' },
+      { value: 'DI', label: 'Diciembre' },
+      { value: 'FE', label: 'Febrero' },
+      { value: 'AB', label: 'Abril' },
+      { value: 'JL', label: 'Julio' }
+    ];
+
+    function formatNumber(value, digits = 2) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return '-';
+      return new Intl.NumberFormat('es-AR', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(numeric);
+    }
+
+    function formatMoney(value) {
+      return `$${formatNumber(value, 0)}`;
+    }
+
+    function formatPercent(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return '-';
+      return `${formatNumber(numeric * 100, 1)}%`;
+    }
+
+    function getStrategyIdFromPath() {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      return parts[0] === 'estrategias' && parts[1] ? parts[1] : null;
+    }
+
+    async function requestJson(url, options) {
+      const res = await fetch(url, {
+        headers: { 'Content-Type': 'application/json' },
+        ...(options || {})
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || 'No se pudo completar la accion.');
+      return json.data;
+    }
+
+    function makeFixedLegs(existingLegs = []) {
+      const byId = new Map(existingLegs.map((leg) => [leg.id, leg]));
+      const legacyCalls = existingLegs.filter((leg) => String(leg.type || '').toUpperCase() === 'CALL' && !String(leg.id || '').startsWith('call-'));
+      const legacyPuts = existingLegs.filter((leg) => String(leg.type || '').toUpperCase() === 'PUT' && !String(leg.id || '').startsWith('put-'));
+      const calls = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => {
+        const id = `call-${index + 1}`;
+        const leg = byId.get(id) || legacyCalls.shift() || {};
+        return { id, type: 'CALL', quantity: leg.quantity ?? '', symbol: leg.symbol || '', premium: leg.premium ?? '', manualPrice: leg.manualPrice ?? '' };
+      });
+      const puts = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => {
+        const id = `put-${index + 1}`;
+        const leg = byId.get(id) || legacyPuts.shift() || {};
+        return { id, type: 'PUT', quantity: leg.quantity ?? '', symbol: leg.symbol || '', premium: leg.premium ?? '', manualPrice: leg.manualPrice ?? '' };
+      });
+      return [...calls, ...puts];
+    }
+
+    function makeFixedHistory(existingRows = []) {
+      const calls = existingRows.filter((row) => String(row.type || '').toUpperCase() === 'CALL');
+      const puts = existingRows.filter((row) => String(row.type || '').toUpperCase() === 'PUT');
+      const makeRows = (type, rows) => Array.from({ length: Math.max(HISTORY_ROWS_PER_SIDE, rows.length) }, (_item, index) => {
+        const row = rows[index] || {};
+        return {
+          id: row.id || `history-${type.toLowerCase()}-${index + 1}`,
+          date: row.date || '',
+          type,
+          quantity: row.quantity ?? '',
+          symbol: row.symbol || '',
+          premium: row.premium ?? '',
+          manualPrice: row.manualPrice ?? ''
+        };
+      });
+      return [...makeRows('CALL', calls), ...makeRows('PUT', puts)];
+    }
+
+    function PayoffChart({ scenarios }) {
+      const data = scenarios || [];
+      if (!data.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Sin escenarios" />;
+      const width = 380;
+      const height = 240;
+      const pad = 24;
+      const minX = Math.min(...data.map((item) => item.underlyingPrice));
+      const maxX = Math.max(...data.map((item) => item.underlyingPrice));
+      const minY = Math.min(...data.map((item) => item.finish), 0);
+      const maxY = Math.max(...data.map((item) => item.finish), 0);
+      const xScale = (x) => pad + ((x - minX) / Math.max(1, maxX - minX)) * (width - pad * 2);
+      const yScale = (y) => height - pad - ((y - minY) / Math.max(1, maxY - minY)) * (height - pad * 2);
+      const points = data.map((item) => `${xScale(item.underlyingPrice)},${yScale(item.finish)}`).join(' ');
+      const zeroY = yScale(0);
+
+      return (
+        <svg className="payoff-chart" viewBox={`0 0 ${width} ${height}`} role="img">
+          <line x1={pad} x2={width - pad} y1={zeroY} y2={zeroY} stroke="#526075" strokeWidth="1" />
+          <polyline fill="none" stroke="#2f93ff" strokeWidth="3" points={points} />
+          <text x={pad} y={height - 7} fill="#98a7b8" fontSize="10">{formatNumber(minX, 0)}</text>
+          <text x={width - pad - 38} y={height - 7} fill="#98a7b8" fontSize="10">{formatNumber(maxX, 0)}</text>
+          <text x={pad} y={13} fill="#98a7b8" fontSize="10">{formatMoney(maxY)}</text>
+          <text x={pad} y={height - 28} fill="#98a7b8" fontSize="10">{formatMoney(minY)}</text>
+        </svg>
+      );
+    }
+
+    function splitClipboardRows(text) {
+      return String(text || '')
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => {
+          const separator = line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',';
+          return line.split(separator).map((cell) => cell.trim());
+        })
+        .filter((cells) => cells.some(Boolean));
+    }
+
+    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', onCellFocus }) {
+      const columns = [
+        { key: 'quantity', title: 'CANT' },
+        { key: 'symbol', title: 'BASE' },
+        { key: 'premium', title: premiumTitle }
+      ];
+      const [selection, setSelection] = useState({ start: { row: 0, col: 0 }, end: { row: 0, col: 0 } });
+      const draggingRef = useRef(false);
+      const gridIdRef = useRef(`grid-${Math.random().toString(36).slice(2)}`);
+
+      useEffect(() => {
+        const stopDragging = () => {
+          draggingRef.current = false;
+        };
+        window.addEventListener('mouseup', stopDragging);
+        return () => window.removeEventListener('mouseup', stopDragging);
+      }, []);
+
+      function bounds() {
+        const start = selection.start || { row: 0, col: 0 };
+        const end = selection.end || start;
+        return {
+          minRow: Math.min(start.row, end.row),
+          maxRow: Math.max(start.row, end.row),
+          minCol: Math.min(start.col, end.col),
+          maxCol: Math.max(start.col, end.col)
+        };
+      }
+
+      function isSelected(rowIndex, colIndex) {
+        const range = bounds();
+        return rowIndex >= range.minRow && rowIndex <= range.maxRow && colIndex >= range.minCol && colIndex <= range.maxCol;
+      }
+
+      function isActive(rowIndex, colIndex) {
+        const start = selection.start || {};
+        return start.row === rowIndex && start.col === colIndex;
+      }
+
+      function selectCell(rowIndex, colIndex) {
+        const next = { start: { row: rowIndex, col: colIndex }, end: { row: rowIndex, col: colIndex } };
+        setSelection(next);
+        onCellFocus?.(rowIndex, colIndex);
+      }
+
+      function copySelection(event) {
+        const range = bounds();
+        const selectedRows = [];
+        for (let rowIndex = range.minRow; rowIndex <= range.maxRow; rowIndex += 1) {
+          selectedRows.push(columns
+            .slice(range.minCol, range.maxCol + 1)
+            .map((column) => rows[rowIndex]?.[column.key] ?? '')
+            .join('\t'));
+        }
+        event.preventDefault();
+        event.clipboardData.setData('text/plain', selectedRows.join('\n'));
+      }
+
+      function normalizePastedCells(cells) {
+        const first = String(cells[0] || '').toUpperCase();
+        if (['CALL', 'PUT'].includes(first)) return cells.slice(1, 4);
+        if (cells.length > 3 && ['CALL', 'PUT'].includes(String(cells[1] || '').toUpperCase())) return cells.slice(2, 5);
+        return cells;
+      }
+
+      function pasteSelection(event) {
+        const rowsToPaste = splitClipboardRows(event.clipboardData?.getData('text/plain'));
+        if (!rowsToPaste.length) return;
+        event.preventDefault();
+        const start = selection.start || { row: 0, col: 0 };
+
+        rowsToPaste.forEach((rawCells, pasteRowIndex) => {
+          const targetRowIndex = start.row + pasteRowIndex;
+          if (targetRowIndex >= rows.length) return;
+          const cells = normalizePastedCells(rawCells);
+          cells.forEach((cellValue, pasteColIndex) => {
+            const targetColIndex = start.col + pasteColIndex;
+            const column = columns[targetColIndex];
+            if (!column) return;
+            const patch = { [column.key]: column.key === 'symbol' ? String(cellValue || '').toUpperCase() : cellValue };
+            onUpdate(targetRowIndex, patch);
+          });
+        });
+      }
+
+      function changeCell(rowIndex, columnKey, value) {
+        const patch = { [columnKey]: columnKey === 'symbol' ? String(value || '').toUpperCase() : value };
+        const type = getRowType(rows[rowIndex]);
+        if (columnKey === 'symbol') {
+          const selected = (optionsByType[type] || []).find((option) => option.value === patch.symbol);
+          if (selected?.option) patch.premium = selected.option.last || selected.option.ask || rows[rowIndex].premium;
+        }
+        onUpdate(rowIndex, patch);
+      }
+
+      return (
+        <div className="input-grid-wrap" tabIndex={0} onCopy={copySelection} onPaste={pasteSelection}>
+          <datalist id={`${gridIdRef.current}-CALL`}>
+            {(optionsByType.CALL || []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </datalist>
+          <datalist id={`${gridIdRef.current}-PUT`}>
+            {(optionsByType.PUT || []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </datalist>
+          <table className="input-grid">
+            <thead>
+              <tr>
+                <th style={{ width: 64 }}>TIPO</th>
+                {columns.map((column) => <th key={column.key}>{column.title}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => {
+                const type = getRowType(row);
+                return (
+                  <tr key={row.id || `${type}-${rowIndex}`} className={type === 'PUT' ? 'type-put' : 'type-call'}>
+                    <td className="type-cell">{type}</td>
+                    {columns.map((column, colIndex) => (
+                      <td
+                        key={column.key}
+                        className={`edit-cell ${isSelected(rowIndex, colIndex) ? 'selected' : ''} ${isActive(rowIndex, colIndex) ? 'active' : ''}`}
+                        onMouseDown={() => {
+                          draggingRef.current = true;
+                          selectCell(rowIndex, colIndex);
+                        }}
+                        onMouseEnter={() => {
+                          if (draggingRef.current) setSelection((current) => ({ ...current, end: { row: rowIndex, col: colIndex } }));
+                        }}
+                      >
+                        <input
+                          className={column.key === 'symbol' ? 'symbol-input' : ''}
+                          value={row[column.key] ?? ''}
+                          list={column.key === 'symbol' ? `${gridIdRef.current}-${type}` : undefined}
+                          onFocus={() => selectCell(rowIndex, colIndex)}
+                          onChange={(event) => changeCell(rowIndex, column.key, event.target.value)}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    function Landing({ onCreate }) {
+      const [form] = Form.useForm();
+      const [creating, setCreating] = useState(false);
+
+      async function submit(values) {
+        setCreating(true);
+        try {
+          await onCreate(values);
+        } finally {
+          setCreating(false);
+        }
+      }
+
+      return (
+        <div className="landing">
+          <section className="hero">
+            <h2>Planilla web de estrategias con opciones</h2>
+            <p>Cada operador tiene su link, sus patas guardadas y cotizaciones actualizadas desde IOL. La logica de calculo vive en la app.</p>
+            <Button type="primary" size="large" onClick={() => form.submit()} loading={creating}>Usar planilla</Button>
+          </section>
+          <section className="landing-panel">
+            <Form form={form} layout="vertical" initialValues={{ name: 'GGAL Agosto', underlying: 'GGAL', monthCode: 'AG', volatility: 0.4, riskFreeRate: 0.125, useAutoIv: false }} onFinish={submit}>
+              <Form.Item name="name" label="Nombre">
+                <Input size="large" />
+              </Form.Item>
+              <div className="form-grid">
+                <Form.Item name="underlying" label="Subyacente">
+                  <Select size="large" options={UNDERLYINGS.map((value) => ({ value, label: value }))} />
+                </Form.Item>
+                <Form.Item name="monthCode" label="Vencimiento">
+                  <Select size="large" options={MONTHS} />
+                </Form.Item>
+                <Form.Item name="volatility" label="Volatilidad">
+                  <InputNumber size="large" min={0.01} step={0.01} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item name="riskFreeRate" label="Tasa libre de riesgo">
+                  <InputNumber size="large" min={0} step={0.005} style={{ width: '100%' }} />
+                </Form.Item>
+              </div>
+            </Form>
+          </section>
+        </div>
+      );
+    }
+
+    function StrategyPage({ initialId }) {
+      const [id, setId] = useState(initialId);
+      const [loading, setLoading] = useState(Boolean(initialId));
+      const [saving, setSaving] = useState(false);
+      const [autoSaving, setAutoSaving] = useState(false);
+      const [payload, setPayload] = useState(null);
+      const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
+      const recalcTimerRef = useRef(null);
+
+      async function loadStrategy(strategyId = id, { force = false } = {}) {
+        if (!strategyId) return;
+        setLoading(true);
+        try {
+          setPayload(await requestJson(`/api/strategies/${strategyId}${force ? '?force=1' : ''}`));
+        } catch (error) {
+          message.error(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      useEffect(() => {
+        loadStrategy(initialId);
+      }, [initialId]);
+
+      useEffect(() => () => {
+        if (recalcTimerRef.current) clearTimeout(recalcTimerRef.current);
+      }, []);
+
+      async function createStrategy(values) {
+        try {
+          const data = await requestJson('/api/strategies', {
+            method: 'POST',
+            body: JSON.stringify({
+              ...values,
+              legs: makeFixedLegs(),
+              history: makeFixedHistory()
+            })
+          });
+          setId(data.strategy.id);
+          setPayload(data);
+          window.history.pushState(null, '', `/estrategias/${data.strategy.id}`);
+        } catch (error) {
+          message.error(error.message);
+        }
+      }
+
+      async function saveStrategy(nextStrategy, { quiet = false } = {}) {
+        if (!id) return;
+        if (quiet) setAutoSaving(true);
+        else setSaving(true);
+        try {
+          const data = await requestJson(`/api/strategies/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(nextStrategy)
+          });
+          setPayload(data);
+        } catch (error) {
+          message.error(error.message);
+        } finally {
+          if (quiet) setAutoSaving(false);
+          else setSaving(false);
+        }
+      }
+
+      if (!id) return <Landing onCreate={createStrategy} />;
+      if (loading || !payload) return <Spin tip="Cargando estrategia..." fullscreen />;
+
+      const strategy = payload.strategy;
+      const calculation = payload.calculation;
+      const chainOptions = payload.chain.options || [];
+      const fixedLegs = makeFixedLegs(strategy.legs);
+      const fixedHistory = makeFixedHistory(strategy.history);
+      if (strategy.legs.length !== fixedLegs.length || strategy.legs.some((leg, index) => leg.id !== fixedLegs[index].id || leg.type !== fixedLegs[index].type)) {
+        strategy.legs = fixedLegs;
+      }
+      if (!Array.isArray(strategy.history) || strategy.history.length !== fixedHistory.length) {
+        strategy.history = fixedHistory;
+      }
+      const optionSelectOptionsByType = {
+        CALL: chainOptions.filter((option) => option.optionType === 'CALL').map((option) => ({
+          value: option.symbol,
+          label: `${option.symbol} | ${formatNumber(option.strike, 0)} | Ult ${formatNumber(option.last, 2)}`,
+          option
+        })),
+        PUT: chainOptions.filter((option) => option.optionType === 'PUT').map((option) => ({
+          value: option.symbol,
+          label: `${option.symbol} | ${formatNumber(option.strike, 0)} | Ult ${formatNumber(option.last, 2)}`,
+          option
+        }))
+      };
+
+      const queueAutoRecalculate = (nextStrategy) => {
+        if (recalcTimerRef.current) clearTimeout(recalcTimerRef.current);
+        recalcTimerRef.current = setTimeout(() => {
+          saveStrategy(nextStrategy, { quiet: true });
+        }, 450);
+      };
+
+      const applyStrategyChange = (nextStrategy, { recalculate = true } = {}) => {
+        setPayload({ ...payload, strategy: nextStrategy });
+        if (recalculate) queueAutoRecalculate(nextStrategy);
+      };
+
+      const updateLeg = (rowIndex, patch) => {
+        const legs = strategy.legs.map((leg, index) => index === rowIndex ? { ...leg, ...patch } : leg);
+        strategy.legs = legs;
+        applyStrategyChange({ ...strategy, legs });
+      };
+
+      const updateHistoryByType = (type, rowIndex, patch) => {
+        const calls = fixedHistory.filter((row) => row.type === 'CALL');
+        const puts = fixedHistory.filter((row) => row.type === 'PUT');
+        const targetRows = type === 'CALL' ? calls : puts;
+        targetRows[rowIndex] = { ...targetRows[rowIndex], ...patch, type };
+        const history = [...calls, ...puts];
+        strategy.history = history;
+        applyStrategyChange({ ...strategy, history });
+      };
+
+      function copyStrategyBlock(type) {
+        const rows = fixedLegs
+          .filter((leg) => leg.type === type)
+          .filter((leg) => leg.quantity !== '' || leg.symbol || leg.premium !== '')
+          .map((leg) => [leg.quantity || '', leg.symbol || '', leg.premium || ''].join('\t'));
+        const text = rows.join('\n');
+        if (!text) {
+          message.info(`No hay ${type} cargados para copiar.`);
+          return;
+        }
+        navigator.clipboard.writeText(text)
+          .then(() => message.success(`${type} copiados como tabla.`))
+          .catch(() => message.error('No pude copiar al portapapeles.'));
+      }
+
+      function parsePastedRows(text) {
+        return String(text || '')
+          .trim()
+          .split(/\r?\n/)
+          .map((line) => {
+            const separator = line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',';
+            return line.split(separator).map((cell) => cell.trim());
+          })
+          .filter((cells) => cells.some(Boolean));
+      }
+
+      function handleHistoryPaste(event, targetType) {
+        const text = event.clipboardData?.getData('text/plain');
+        const pastedRows = parsePastedRows(text);
+        if (!pastedRows.length) return;
+        event.preventDefault();
+
+        const history = makeFixedHistory(strategy.history);
+        const calls = history.filter((row) => row.type === 'CALL');
+        const puts = history.filter((row) => row.type === 'PUT');
+        const targetRows = targetType === 'CALL' ? calls : puts;
+        const startIndex = focusedHistoryTarget.type === targetType ? focusedHistoryTarget.index : 0;
+        let writeIndex = Math.max(0, Math.min(startIndex || 0, targetRows.length - 1));
+
+        for (const cells of pastedRows) {
+          if (writeIndex >= targetRows.length) break;
+          const current = targetRows[writeIndex];
+          let next = {};
+          const first = String(cells[0] || '').toUpperCase();
+
+          if (['CALL', 'PUT'].includes(first)) {
+            next = { quantity: cells[1] || '', symbol: cells[2] || '', premium: cells[3] || '' };
+          } else if (['CALL', 'PUT'].includes(String(cells[1] || '').toUpperCase())) {
+            next = { quantity: cells[2] || '', symbol: cells[3] || '', premium: cells[4] || '' };
+          } else {
+            next = { quantity: cells[0] || '', symbol: cells[1] || '', premium: cells[2] || '' };
+          }
+
+          targetRows[writeIndex] = {
+            ...current,
+            ...next,
+            type: targetType,
+            symbol: String(next.symbol ?? current.symbol ?? '').toUpperCase()
+          };
+          writeIndex += 1;
+        }
+
+        applyStrategyChange({ ...strategy, history: [...calls, ...puts] });
+        message.success(`Pegado en historial ${targetType}.`);
+      }
+
+      function ResultValue({ value }) {
+        const numeric = Number(value);
+        const className = numeric < 0 ? 'result-negative' : 'result-positive';
+        return <span className={className}>{formatNumber(value, 0)}</span>;
+      }
+
+      const legResultById = new Map((calculation.legs || []).map((leg) => [leg.id, leg]));
+      const legsWithResults = fixedLegs.map((leg) => ({
+        ...leg,
+        result: legResultById.get(leg.id)
+      }));
+      const originalIndexById = new Map(fixedLegs.map((leg, index) => [leg.id, index]));
+      const quantityByTypeStrike = new Map();
+      for (const leg of calculation.legs || []) {
+        const key = `${leg.type}-${leg.strike}`;
+        quantityByTypeStrike.set(key, (quantityByTypeStrike.get(key) || 0) + Number(leg.quantity || 0));
+      }
+      const optionsByStrike = new Map();
+      for (const option of chainOptions) {
+        if (!optionsByStrike.has(option.strike)) optionsByStrike.set(option.strike, { key: option.strike, strike: option.strike, call: null, put: null });
+        const row = optionsByStrike.get(option.strike);
+        if (option.optionType === 'CALL') row.call = option;
+        if (option.optionType === 'PUT') row.put = option;
+      }
+      const baseRows = Array.from(optionsByStrike.values()).sort((a, b) => a.strike - b.strike);
+      const simulationRows = calculation.percentScenarios || [];
+      const legColumns = [
+        {
+          title: 'TIPO',
+          dataIndex: 'type',
+          width: 58,
+          onCell: (row) => ({ className: row.type === 'PUT' ? 'sheet-type-put' : 'sheet-type-call' }),
+          render: (value) => value
+        },
+        {
+          title: 'CANT',
+          dataIndex: 'quantity',
+          width: 68,
+          className: 'sheet-input',
+          render: (value, row) => (
+            <InputNumber size="small" value={value} style={{ width: 62 }} onChange={(quantity) => updateLeg(originalIndexById.get(row.id), { quantity })} />
+          )
+        },
+        {
+          title: 'BASE',
+          dataIndex: 'symbol',
+          width: 138,
+          className: 'sheet-input',
+          render: (value, row) => (
+            <Select
+              showSearch
+              size="small"
+              value={value || undefined}
+              placeholder="Base"
+              style={{ width: 132 }}
+              options={optionSelectOptionsByType[row.type] || []}
+              optionFilterProp="label"
+              onChange={(symbol) => {
+                const selected = chainOptions.find((option) => option.symbol === symbol);
+                const originalIndex = originalIndexById.get(row.id);
+                updateLeg(originalIndex, { symbol, premium: selected?.last || selected?.ask || strategy.legs[originalIndex].premium });
+              }}
+            />
+          )
+        },
+        {
+          title: 'PRIMA',
+          dataIndex: 'premium',
+          width: 78,
+          className: 'sheet-input',
+          render: (value, row) => (
+            <InputNumber size="small" value={value} min={0} step={0.01} style={{ width: 72 }} onChange={(premium) => updateLeg(originalIndexById.get(row.id), { premium })} />
+          )
+        },
+        {
+          title: 'BRUTO',
+          width: 78,
+          className: 'sheet-calc',
+          render: (_value, row) => formatNumber(row.result?.gross, 0)
+        },
+        {
+          title: 'NETO',
+          width: 78,
+          className: 'sheet-calc',
+          render: (_value, row) => formatNumber(row.result?.net, 0)
+        },
+        {
+          title: '$ HOY',
+          width: 76,
+          className: 'sheet-calc',
+          render: (_value, row) => formatNumber(row.result?.currentPrice, 3)
+        },
+        {
+          title: '$ HOY',
+          width: 76,
+          className: 'sheet-calc',
+          render: (_value, row) => formatNumber(row.result?.currentValue, 0)
+        },
+        {
+          title: 'DIF. CPRA.',
+          width: 88,
+          className: 'sheet-calc',
+          render: (_value, row) => formatNumber(row.result?.todayResult, 0)
+        },
+      ];
+
+      const historyCallsWithResults = fixedHistory.filter((row) => row.type === 'CALL').map((row, index) => ({
+        ...row,
+        tableIndex: index,
+        result: legResultById.get(row.id)
+      }));
+      const historyPutsWithResults = fixedHistory.filter((row) => row.type === 'PUT').map((row, index) => ({
+        ...row,
+        tableIndex: index,
+        result: legResultById.get(row.id)
+      }));
+
+      const makeHistoryColumns = (type) => [
+        {
+          title: 'CANT',
+          dataIndex: 'quantity',
+          width: 72,
+          className: 'sheet-input',
+          render: (value, row) => (
+            <InputNumber
+              size="small"
+              value={value}
+              style={{ width: 66 }}
+              onFocus={() => setFocusedHistoryTarget({ type, index: row.tableIndex })}
+              onChange={(quantity) => updateHistoryByType(type, row.tableIndex, { quantity })}
+            />
+          )
+        },
+        {
+          title: 'BASE',
+          dataIndex: 'symbol',
+          width: 138,
+          className: 'sheet-input',
+          render: (value, row) => (
+            <Select
+              showSearch
+              size="small"
+              value={value || undefined}
+              placeholder="Base"
+              style={{ width: 132 }}
+              options={optionSelectOptionsByType[type] || []}
+              optionFilterProp="label"
+              onFocus={() => setFocusedHistoryTarget({ type, index: row.tableIndex })}
+              onChange={(symbol) => {
+                const selected = chainOptions.find((option) => option.symbol === symbol);
+                updateHistoryByType(type, row.tableIndex, { symbol, premium: selected?.last || selected?.ask || row.premium });
+              }}
+            />
+          )
+        },
+        {
+          title: 'PRIMA/PRECIO',
+          dataIndex: 'premium',
+          width: 96,
+          className: 'sheet-input',
+          render: (value, row) => (
+            <InputNumber
+              size="small"
+              value={value}
+              min={0}
+              step={0.01}
+              style={{ width: 88 }}
+              onFocus={() => setFocusedHistoryTarget({ type, index: row.tableIndex })}
+              onChange={(premium) => updateHistoryByType(type, row.tableIndex, { premium })}
+            />
+          )
+        }
+      ];
+
+      const simulationColumns = [
+        {
+          title: '%',
+          dataIndex: 'percent',
+          width: 72,
+          onCell: (row) => ({ className: row.percent < -10 ? 'sim-negative' : row.percent === 0 ? 'sim-zero' : row.percent > 10 ? 'sim-warn' : 'sim-positive' }),
+          render: (value) => `${value}%`
+        },
+        {
+          title: 'Precio',
+          dataIndex: 'underlyingPrice',
+          width: 105,
+          render: (value) => formatNumber(value, 2)
+        },
+        {
+          title: 'Rtdo. Finish',
+          dataIndex: 'finish',
+          width: 112,
+          className: 'result-cell',
+          render: (value) => <ResultValue value={value} />
+        },
+        {
+          title: 'Rtdo. Teórico',
+          dataIndex: 'theoretical',
+          width: 112,
+          className: 'result-cell',
+          render: (value) => <ResultValue value={value} />
+        }
+      ];
+
+      const basesColumns = [
+        { title: 'TIPO', width: 62, className: 'call-side', render: () => 'CALL' },
+        {
+          title: 'CANT',
+          width: 64,
+          className: 'base-side',
+          render: (_value, row) => formatNumber(quantityByTypeStrike.get(`CALL-${row.strike}`) || 0, 0)
+        },
+        {
+          title: 'BASE',
+          width: 88,
+          className: 'base-side',
+          render: (_value, row) => formatNumber(row.strike, 2)
+        },
+        {
+          title: 'VI Auto',
+          width: 78,
+          className: 'vi-cell',
+          render: (_value, row) => formatPercent(row.call?.impliedVolatility)
+        },
+        {
+          title: 'VI Manual',
+          width: 84,
+          className: 'vi-cell',
+          render: () => formatPercent(strategy.volatility)
+        },
+        { title: 'TIPO', width: 62, className: 'put-side', render: () => 'PUT' },
+        {
+          title: 'CANT',
+          width: 64,
+          className: 'base-side',
+          render: (_value, row) => formatNumber(quantityByTypeStrike.get(`PUT-${row.strike}`) || 0, 0)
+        },
+        {
+          title: 'BASE',
+          width: 88,
+          className: 'base-side',
+          render: (_value, row) => formatNumber(row.strike, 2)
+        },
+        {
+          title: 'VI Auto',
+          width: 78,
+          className: 'vi-cell',
+          render: (_value, row) => formatPercent(row.put?.impliedVolatility)
+        },
+        {
+          title: 'VI Manual',
+          width: 84,
+          className: 'vi-cell',
+          render: () => formatPercent(strategy.volatility)
+        }
+      ];
+
+      const updateMeta = (patch) => {
+        applyStrategyChange({ ...strategy, ...patch });
+      };
+
+      return (
+        <>
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <Input value={strategy.name} style={{ width: 240 }} onChange={(event) => updateMeta({ name: event.target.value })} />
+            <Select value={strategy.underlying} style={{ width: 110 }} options={UNDERLYINGS.map((value) => ({ value, label: value }))} onChange={(underlying) => updateMeta({ underlying })} />
+            <Select value={strategy.monthCode} style={{ width: 130 }} options={MONTHS} onChange={(monthCode) => updateMeta({ monthCode })} />
+            <InputNumber value={strategy.volatility} min={0.01} step={0.01} style={{ width: 120 }} onChange={(volatility) => updateMeta({ volatility })} />
+            <InputNumber value={strategy.riskFreeRate} min={0} step={0.005} style={{ width: 120 }} onChange={(riskFreeRate) => updateMeta({ riskFreeRate })} />
+            <Space size={6} align="center">
+              <span className="muted">VI</span>
+              <Switch
+                checked={Boolean(strategy.useAutoIv)}
+                checkedChildren="Auto"
+                unCheckedChildren="Manual"
+                onChange={(useAutoIv) => updateMeta({ useAutoIv })}
+              />
+            </Space>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => saveStrategy(strategy)}>Guardar y recalcular</Button>
+            <Button icon={<ReloadOutlined />} onClick={() => loadStrategy(id, { force: true })}>Actualizar IOL</Button>
+            {autoSaving ? <Tag color="gold">Recalculando...</Tag> : <Tag color="green">Auto</Tag>}
+            <Tag color="blue">/{id}</Tag>
+          </div>
+
+          <div className="metrics">
+            <div className="metric"><div className="metric-label">Spot estimado</div><div className="metric-value">{formatNumber(calculation.spot, 2)}</div></div>
+            <div className="metric"><div className="metric-label">Neto inicial</div><div className="metric-value">{formatMoney(calculation.summary.net)}</div></div>
+            <div className="metric"><div className="metric-label">Resultado hoy</div><div className={`metric-value ${calculation.summary.todayResult >= 0 ? 'positive' : 'negative'}`}>{formatMoney(calculation.summary.todayResult)}</div></div>
+            <div className="metric"><div className="metric-label">Delta global</div><div className="metric-value">{formatNumber(calculation.summary.delta, 2)}</div></div>
+          </div>
+
+          <div className="spreadsheet-grid">
+            <section className="panel">
+              <div className="sheet-title">Simulaciones ↓</div>
+              <div className="panel-header" style={{ minHeight: 34 }}>
+                <div className="panel-title">Carga de estrategia</div>
+                <Space size={6}>
+                  <Button size="small" onClick={() => copyStrategyBlock('CALL')}>Copiar CALLS</Button>
+                  <Button size="small" onClick={() => copyStrategyBlock('PUT')}>Copiar PUTS</Button>
+                </Space>
+              </div>
+              <SpreadsheetInputGrid
+                rows={legsWithResults}
+                getRowType={(row) => row.type}
+                optionsByType={optionSelectOptionsByType}
+                onUpdate={(rowIndex, patch) => updateLeg(originalIndexById.get(legsWithResults[rowIndex].id), patch)}
+              />
+            </section>
+
+            <section className="panel">
+              <Table
+                className="sheet-table"
+                size="small"
+                rowKey={(row) => row.percent}
+                pagination={false}
+                columns={simulationColumns}
+                dataSource={simulationRows}
+              />
+            </section>
+
+            <section className="panel">
+              <Table
+                className="sheet-table"
+                size="small"
+                rowKey="strike"
+                pagination={false}
+                columns={basesColumns}
+                dataSource={baseRows}
+                scroll={{ x: 732, y: 620 }}
+              />
+            </section>
+          </div>
+
+          <section className="panel" style={{ marginTop: 12 }}>
+            <div className="panel-header">
+              <div className="panel-title">Historial del dia</div>
+              <span className="muted">Pega cantidad/base/prima en el bloque de CALLS o PUTS</span>
+            </div>
+            <div className="history-grid">
+              <div>
+                <div className="history-block-title">CALLS</div>
+                <SpreadsheetInputGrid
+                  rows={historyCallsWithResults}
+                  getRowType={() => 'CALL'}
+                  optionsByType={optionSelectOptionsByType}
+                  premiumTitle="PRIMA/PRECIO"
+                  onCellFocus={(rowIndex) => setFocusedHistoryTarget({ type: 'CALL', index: rowIndex })}
+                  onUpdate={(rowIndex, patch) => updateHistoryByType('CALL', rowIndex, patch)}
+                />
+              </div>
+              <div>
+                <div className="history-block-title">PUTS</div>
+                <SpreadsheetInputGrid
+                  rows={historyPutsWithResults}
+                  getRowType={() => 'PUT'}
+                  optionsByType={optionSelectOptionsByType}
+                  premiumTitle="PRIMA/PRECIO"
+                  onCellFocus={(rowIndex) => setFocusedHistoryTarget({ type: 'PUT', index: rowIndex })}
+                  onUpdate={(rowIndex, patch) => updateHistoryByType('PUT', rowIndex, patch)}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="panel" style={{ marginTop: 12 }}>
+            <div className="panel-header">
+              <div className="panel-title">Detalle de cadena IOL</div>
+              <span className="muted">{chainOptions.length} opciones, VI Auto calculada con Black-Scholes</span>
+            </div>
+            <div className="payoff-wrap">
+              <PayoffChart scenarios={calculation.scenarios} />
+            </div>
+          </section>
+        </>
+      );
+    }
+
+    function App() {
+      return (
+        <ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: { colorPrimary: '#2f93ff', borderRadius: 6 } }}>
+          <main className="page">
+            <header className="topbar">
+              <div className="brand">
+                <h1>Planilla Sabro</h1>
+                <span>Motor web de estrategias</span>
+              </div>
+              <Space>
+                <Button href="/cotizaciones">Cotizaciones</Button>
+                <Button href="/estrategias" type="primary">Nueva estrategia</Button>
+              </Space>
+            </header>
+            <div className="content">
+              <StrategyPage initialId={getStrategyIdFromPath()} />
+            </div>
+          </main>
+        </ConfigProvider>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

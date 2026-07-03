@@ -1,0 +1,1957 @@
+{
+  "strategies": {
+    "0fc29101": {
+      "id": "0fc29101",
+      "name": "GGAL Agosto test",
+      "underlying": "GGAL",
+      "monthCode": "AG",
+      "expiration": null,
+      "spot": null,
+      "riskFreeRate": 0.125,
+      "volatility": 0.4,
+      "legs": [
+        {
+          "id": "leg-1",
+          "type": "CALL",
+          "quantity": 1,
+          "symbol": "GFGC7000AG",
+          "premium": 10,
+          "manualPrice": ""
+        },
+        {
+          "id": "leg-2",
+          "type": "PUT",
+          "quantity": -10,
+          "symbol": "GFGV7000AG",
+          "premium": 10,
+          "manualPrice": ""
+        }
+      ],
+      "createdAt": "2026-07-03T01:20:04.103Z",
+      "updatedAt": "2026-07-03T01:20:04.103Z"
+    },
+    "da8ca092": {
+      "id": "da8ca092",
+      "name": "GGAL Agosto test",
+      "underlying": "GGAL",
+      "monthCode": "AG",
+      "expiration": null,
+      "spot": null,
+      "riskFreeRate": 0.125,
+      "volatility": 0.4,
+      "legs": [
+        {
+          "id": "call-1",
+          "type": "CALL",
+          "quantity": 1,
+          "symbol": "GFGC7000AG",
+          "premium": 970,
+          "manualPrice": ""
+        },
+        {
+          "id": "call-2",
+          "type": "CALL",
+          "quantity": -1,
+          "symbol": "GFGC8000AG",
+          "premium": 484,
+          "manualPrice": ""
+        },
+        {
+          "id": "call-3",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-4",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-5",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": 0.02,
+          "manualPrice": ""
+        },
+        {
+          "id": "call-6",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-7",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-8",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-9",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-10",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-11",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-12",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-1",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "GFGV8000AG",
+          "premium": 393.99,
+          "manualPrice": ""
+        },
+        {
+          "id": "put-2",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-3",
+          "type": "PUT",
+          "quantity": 0,
+          "symbol": "GFGV4200AG",
+          "premium": 1,
+          "manualPrice": ""
+        },
+        {
+          "id": "put-4",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-5",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-6",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-7",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-8",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-9",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-10",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-11",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-12",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        }
+      ],
+      "createdAt": "2026-07-03T01:20:29.268Z",
+      "updatedAt": "2026-07-03T02:33:57.226Z",
+      "history": [
+        {
+          "id": "history-1",
+          "date": "",
+          "type": "CALL",
+          "quantity": 0,
+          "symbol": "GFGC7000AG",
+          "premium": 970,
+          "manualPrice": ""
+        },
+        {
+          "id": "history-2",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "GFGC4400OC",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-5",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-6",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-7",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-8",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-9",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-10",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-9",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-10",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-11",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-12",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-13",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-14",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-15",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-16",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-17",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-18",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-19",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-20",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-21",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-22",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-23",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-24",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-1",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-2",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-3",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-4",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-5",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-6",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-7",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-8",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-9",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-10",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-11",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-12",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-13",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-14",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-15",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-16",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-17",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-18",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-19",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-20",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-21",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-22",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-23",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-24",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        }
+      ],
+      "useAutoIv": false
+    },
+    "f7b3a814": {
+      "id": "f7b3a814",
+      "name": "GGAL Agosto",
+      "underlying": "GGAL",
+      "monthCode": "AG",
+      "expiration": null,
+      "spot": null,
+      "riskFreeRate": 0.125,
+      "volatility": 0.4,
+      "legs": [
+        {
+          "id": "call-1",
+          "type": "CALL",
+          "quantity": 0,
+          "symbol": "GFGC8900AG",
+          "premium": 164.1,
+          "manualPrice": ""
+        },
+        {
+          "id": "call-2",
+          "type": "CALL",
+          "quantity": 0,
+          "symbol": "GFGC7000AG",
+          "premium": 1145.459,
+          "manualPrice": ""
+        },
+        {
+          "id": "call-3",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-4",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-5",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-6",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-7",
+          "type": "CALL",
+          "quantity": 0,
+          "symbol": "GFGC8000AG",
+          "premium": 485,
+          "manualPrice": ""
+        },
+        {
+          "id": "call-8",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-9",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-10",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-11",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-12",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-1",
+          "type": "PUT",
+          "quantity": 0,
+          "symbol": "GFGC7000AG",
+          "premium": 1145.459,
+          "manualPrice": ""
+        },
+        {
+          "id": "put-2",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "GFGV7000AG",
+          "premium": 87,
+          "manualPrice": ""
+        },
+        {
+          "id": "put-3",
+          "type": "PUT",
+          "quantity": 0,
+          "symbol": "GFGV5800AG",
+          "premium": 6.15,
+          "manualPrice": ""
+        },
+        {
+          "id": "put-4",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-5",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-6",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-7",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-8",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-9",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-10",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-11",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-12",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        }
+      ],
+      "createdAt": "2026-07-03T01:24:58.802Z",
+      "updatedAt": "2026-07-03T13:42:15.961Z",
+      "history": [
+        {
+          "id": "history-1",
+          "date": "",
+          "type": "CALL",
+          "quantity": 0,
+          "symbol": "164.1",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-2",
+          "date": "",
+          "type": "CALL",
+          "quantity": "1",
+          "symbol": "GFGC7000AG",
+          "premium": 145.459,
+          "manualPrice": ""
+        },
+        {
+          "id": "history-3",
+          "date": "",
+          "type": "CALL",
+          "quantity": -1,
+          "symbol": "GFGC7000AG",
+          "premium": 1145.459,
+          "manualPrice": ""
+        },
+        {
+          "id": "history-4",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-5",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-6",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-7",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-8",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-9",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-10",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-11",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-12",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-13",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-14",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-15",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-16",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-17",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-18",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-19",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-20",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-21",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-22",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-23",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-24",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-11",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-12",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-13",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-14",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-15",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-16",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-17",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-18",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-19",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-20",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-11",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-12",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-13",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-14",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-15",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-16",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-17",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-18",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-19",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-20",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-21",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-22",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-23",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-24",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        }
+      ],
+      "useAutoIv": false
+    },
+    "e72980e2": {
+      "id": "e72980e2",
+      "name": "GGAL Agosto",
+      "underlying": "GGAL",
+      "monthCode": "AG",
+      "expiration": null,
+      "spot": null,
+      "riskFreeRate": 0.125,
+      "volatility": 0.4,
+      "useAutoIv": false,
+      "legs": [
+        {
+          "id": "call-1",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-2",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-3",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-4",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-5",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-6",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-7",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-8",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-9",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-10",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-11",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "call-12",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-1",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-2",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-3",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-4",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-5",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-6",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-7",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-8",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-9",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-10",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-11",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "put-12",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        }
+      ],
+      "history": [
+        {
+          "id": "history-call-1",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-2",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-3",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-4",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-5",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-6",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-7",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-8",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-9",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-10",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-11",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-12",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-13",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-14",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-15",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-16",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-17",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-18",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-19",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-20",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-21",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-22",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-23",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-call-24",
+          "date": "",
+          "type": "CALL",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-1",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-2",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-3",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-4",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-5",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-6",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-7",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-8",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-9",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-10",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-11",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-12",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-13",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-14",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-15",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-16",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-17",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-18",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-19",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-20",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-21",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-22",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-23",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        },
+        {
+          "id": "history-put-24",
+          "date": "",
+          "type": "PUT",
+          "quantity": "",
+          "symbol": "",
+          "premium": "",
+          "manualPrice": ""
+        }
+      ],
+      "createdAt": "2026-07-03T02:35:24.858Z",
+      "updatedAt": "2026-07-03T02:35:24.858Z"
+    }
+  }
+}
