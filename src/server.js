@@ -27,7 +27,7 @@ const port = process.env.PORT || 3000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '../public');
 const AUTH_USER = process.env.APP_AUTH_USER || 'santi';
-const AUTH_PASSWORD = process.env.APP_AUTH_PASSWORD || 'sava9379';
+const AUTH_PASSWORD = process.env.APP_AUTH_PASSWORD || process.env.APP_PASSWORD || '';
 const AUTH_SECRET = process.env.APP_AUTH_SECRET || process.env.SESSION_SECRET || AUTH_PASSWORD;
 const AUTH_COOKIE = 'sabro_auth';
 const AUTO_REFRESH_UNDERLYINGS = (process.env.MARKET_CACHE_UNDERLYINGS || 'GGAL,YPFD,COME,PAMP,BMA,ALUA,SUPV')
@@ -89,6 +89,9 @@ app.get('/login', (_req, res) => {
 });
 
 app.post('/api/login', (req, res) => {
+  if (!AUTH_PASSWORD || !AUTH_SECRET) {
+    return res.status(503).json({ ok: false, error: 'Login no configurado.' });
+  }
   const username = String(req.body?.username || '');
   const password = String(req.body?.password || '');
   if (username !== AUTH_USER || password !== AUTH_PASSWORD) {
