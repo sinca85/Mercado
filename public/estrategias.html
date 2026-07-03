@@ -508,7 +508,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.7/babel.min.js"></script>
   <script type="text/babel">
     const { useEffect, useMemo, useRef, useState } = React;
-    const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Select, Space, Spin, Switch, Table, Tag, message, theme } = antd;
+    const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Popconfirm, Select, Space, Spin, Switch, Table, Tag, message, theme } = antd;
     const { ReloadOutlined, SaveOutlined } = icons;
 
     const UNDERLYINGS = ['GGAL', 'YPFD', 'COME', 'PAMP', 'BMA', 'ALUA', 'SUPV'];
@@ -776,6 +776,25 @@
     function Landing({ onCreate }) {
       const [form] = Form.useForm();
       const [creating, setCreating] = useState(false);
+      const [strategies, setStrategies] = useState([]);
+      const [loadingStrategies, setLoadingStrategies] = useState(true);
+      const [deletingId, setDeletingId] = useState(null);
+
+      async function loadStrategies() {
+        setLoadingStrategies(true);
+        try {
+          const data = await requestJson('/api/strategies');
+          setStrategies(data.strategies || []);
+        } catch (error) {
+          message.error(error.message);
+        } finally {
+          setLoadingStrategies(false);
+        }
+      }
+
+      useEffect(() => {
+        loadStrategies();
+      }, []);
 
       async function submit(values) {
         setCreating(true);
@@ -785,6 +804,55 @@
           setCreating(false);
         }
       }
+
+      async function deleteExistingStrategy(strategyId) {
+        setDeletingId(strategyId);
+        try {
+          await requestJson(`/api/strategies/${strategyId}`, { method: 'DELETE' });
+          setStrategies((current) => current.filter((strategy) => strategy.id !== strategyId));
+          message.success('Planilla eliminada.');
+        } catch (error) {
+          message.error(error.message);
+        } finally {
+          setDeletingId(null);
+        }
+      }
+
+      const existingColumns = [
+        {
+          title: 'Nombre',
+          dataIndex: 'name',
+          render: (value, row) => <a href={`/estrategias/${row.id}`}>{value || 'Estrategia sin nombre'}</a>
+        },
+        {
+          title: 'Subyacente',
+          dataIndex: 'underlying',
+          width: 96
+        },
+        {
+          title: 'Vto.',
+          dataIndex: 'monthCode',
+          width: 72
+        },
+        {
+          title: '',
+          width: 164,
+          render: (_value, row) => (
+            <Space size={6}>
+              <Button size="small" href={`/estrategias/${row.id}`}>Entrar</Button>
+              <Popconfirm
+                title="Eliminar planilla"
+                description="Esta accion no se puede deshacer."
+                okText="Eliminar"
+                cancelText="Cancelar"
+                onConfirm={() => deleteExistingStrategy(row.id)}
+              >
+                <Button danger size="small" loading={deletingId === row.id}>Eliminar</Button>
+              </Popconfirm>
+            </Space>
+          )
+        }
+      ];
 
       return (
         <div className="landing">
@@ -813,12 +881,28 @@
                 </Form.Item>
               </div>
             </Form>
+            <div className="panel" style={{ marginTop: 16 }}>
+              <div className="panel-header">
+                <div className="panel-title">Planillas guardadas</div>
+                <span className="muted">{strategies.length} planillas</span>
+              </div>
+              <Table
+                className="chain-table"
+                size="small"
+                rowKey="id"
+                loading={loadingStrategies}
+                pagination={{ pageSize: 8, size: 'small' }}
+                columns={existingColumns}
+                dataSource={strategies}
+                locale={{ emptyText: 'Todavia no hay planillas guardadas.' }}
+              />
+            </div>
           </section>
         </div>
       );
     }
 
-    function StrategyPage({ initialId }) {
+    function StrategyPage({ initialId, onStrategyNameChange }) {
       const [id, setId] = useState(initialId);
       const [loading, setLoading] = useState(Boolean(initialId));
       const [saving, setSaving] = useState(false);
@@ -846,6 +930,10 @@
       useEffect(() => () => {
         if (recalcTimerRef.current) clearTimeout(recalcTimerRef.current);
       }, []);
+
+      useEffect(() => {
+        onStrategyNameChange?.(payload?.strategy?.name || '');
+      }, [payload?.strategy?.name, onStrategyNameChange]);
 
       async function createStrategy(values) {
         try {
@@ -1382,12 +1470,19 @@
     }
 
     function App() {
+      const [strategyName, setStrategyName] = useState('');
+      const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
+
+      useEffect(() => {
+        document.title = pageTitle;
+      }, [pageTitle]);
+
       return (
         <ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: { colorPrimary: '#2f93ff', borderRadius: 6 } }}>
           <main className="page">
             <header className="topbar">
               <div className="brand">
-                <h1>Planilla Sabro</h1>
+                <h1>{pageTitle}</h1>
                 <span>Motor web de estrategias</span>
               </div>
               <Space>
@@ -1396,7 +1491,7 @@
               </Space>
             </header>
             <div className="content">
-              <StrategyPage initialId={getStrategyIdFromPath()} />
+              <StrategyPage initialId={getStrategyIdFromPath()} onStrategyNameChange={setStrategyName} />
             </div>
           </main>
         </ConfigProvider>

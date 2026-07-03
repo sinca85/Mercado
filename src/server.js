@@ -18,7 +18,7 @@ import {
   getUnderlyingOptions
 } from './iolClient.js';
 import { buildOptionChainResponse, calculateStrategy, normalizeOptionsPanel, numberValue } from './optionsEngine.js';
-import { createStrategy, getStrategy, updateStrategy } from './strategyStore.js';
+import { createStrategy, deleteStrategy, getStrategy, listStrategies, updateStrategy } from './strategyStore.js';
 import { getCachedMarketData, isMarketOpen, marketCacheStatus } from './marketDataCache.js';
 
 const app = express();
@@ -340,6 +340,19 @@ app.post('/api/strategies', async (req, res) => {
   }
 });
 
+app.get('/api/strategies', async (_req, res) => {
+  try {
+    const strategies = await listStrategies();
+    res.json({
+      ok: true,
+      receivedAt: new Date().toISOString(),
+      data: { strategies }
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
 app.get('/api/strategies/:id', async (req, res) => {
   try {
     const strategy = await getStrategy(String(req.params.id));
@@ -348,6 +361,19 @@ app.get('/api/strategies/:id', async (req, res) => {
     }
     const data = await buildStrategyPayload(strategy, { forceMarketData: req.query.force === '1' || req.query.force === 'true' });
 
+    res.json({
+      ok: true,
+      receivedAt: new Date().toISOString(),
+      data
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.delete('/api/strategies/:id', async (req, res) => {
+  try {
+    const data = await deleteStrategy(String(req.params.id));
     res.json({
       ok: true,
       receivedAt: new Date().toISOString(),

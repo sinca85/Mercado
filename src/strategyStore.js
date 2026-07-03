@@ -180,6 +180,39 @@ export async function createStrategy(input = {}) {
   return strategy;
 }
 
+export async function listStrategies() {
+  const collection = await strategiesCollection();
+  if (collection) {
+    return collection
+      .find({}, {
+        projection: {
+          _id: 0,
+          id: 1,
+          name: 1,
+          underlying: 1,
+          monthCode: 1,
+          updatedAt: 1,
+          createdAt: 1
+        }
+      })
+      .sort({ updatedAt: -1 })
+      .limit(200)
+      .toArray();
+  }
+
+  const store = await readStore();
+  return Object.values(store.strategies || {})
+    .map((strategy) => ({
+      id: strategy.id,
+      name: strategy.name,
+      underlying: strategy.underlying,
+      monthCode: strategy.monthCode,
+      updatedAt: strategy.updatedAt,
+      createdAt: strategy.createdAt
+    }))
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+}
+
 export async function getStrategy(id) {
   const collection = await strategiesCollection();
   if (collection) {
@@ -211,6 +244,29 @@ export async function getStrategy(id) {
   }
 
   return strategy;
+}
+
+export async function deleteStrategy(id) {
+  const collection = await strategiesCollection();
+  if (collection) {
+    const result = await collection.deleteOne({ id });
+    if (!result.deletedCount) {
+      const error = new Error(`No existe estrategia ${id}.`);
+      error.status = 404;
+      throw error;
+    }
+    return { id };
+  }
+
+  const store = await readStore();
+  if (!store.strategies[id]) {
+    const error = new Error(`No existe estrategia ${id}.`);
+    error.status = 404;
+    throw error;
+  }
+  delete store.strategies[id];
+  await writeStore(store);
+  return { id };
 }
 
 export async function updateStrategy(id, input = {}) {
