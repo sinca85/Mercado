@@ -1,11 +1,17 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { MongoClient } from 'mongodb';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const STORE_PATH = path.join(DATA_DIR, 'strategies.json');
 const STRATEGY_ROWS_PER_SIDE = 12;
 const HISTORY_ROWS_PER_SIDE = 24;
+const DEFAULT_DB_NAME = 'iol_market_data_lab';
+
+let mongoClient = null;
+let mongoCollection = null;
+let mongoWarningShown = false;
 
 async function ensureStore() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -25,6 +31,26 @@ async function readStore() {
 async function writeStore(store) {
   await ensureStore();
   await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2));
+}
+
+async function strategiesCollection() {
+  if (!process.env.MONGO_URI) return null;
+  if (mongoCollection) return mongoCollection;
+
+  try {
+    mongoClient = mongoClient || new MongoClient(process.env.MONGO_URI);
+    await mongoClient.connect();
+    const db = mongoClient.db(process.env.MONGO_DB || DEFAULT_DB_NAME);
+    mongoCollection = db.collection('strategies');
+    await mongoCollection.createIndex({ id: 1 }, { unique: true });
+    return mongoCollection;
+  } catch (error) {
+    if (!mongoWarningShown) {
+      console.warn(`Mongo strategies deshabilitado: ${error.message}`);
+      mongoWarningShown = true;
+    }
+    return null;
+  }
 }
 
 function makeId() {
@@ -131,9 +157,10 @@ function normalizeStrategy(input = {}) {
 }
 
 export async function createStrategy(input = {}) {
-  const store = await readStore();
+  const collection = await strategiesCollection();
+  const store = collection ? null : await readStore();
   let id = makeId();
-  while (store.strategies[id]) id = makeId();
+  while (collection ? await collection.findOne({ id }) : store.strategies[id]) id = makeId();
 
   const now = new Date().toISOString();
   const strategy = {
@@ -143,25 +170,70 @@ export async function createStrategy(input = {}) {
     updatedAt: now
   };
 
-  store.strategies[id] = strategy;
-  await writeStore(store);
+  if (collection) {
+    await collection.insertOne(strategy);
+  } else {
+    store.strategies[id] = strategy;
+    await writeStore(store);
+  }
   return strategy;
 }
 
 export async function getStrategy(id) {
+  const collection = await strategiesCollection();
+  if (collection) {
+    const existing = await collection.findOne({ id }, { projection: { _id: 0 } });
+    if (existing) {
+      return {
+        ...existing,
+        ...normalizeStrategy(existing),
+        id,
+        createdAt: existing.createdAt,
+        updatedAt: existing.updatedAt
+      };
+    }
+  }
+
   const store = await readStore();
   const existing = store.strategies[id];
   if (!existing) return null;
-  return {
+  const strategy = {
     ...existing,
     ...normalizeStrategy(existing),
     id,
     createdAt: existing.createdAt,
     updatedAt: existing.updatedAt
   };
+
+  if (collection) {
+    await collection.updateOne({ id }, { $set: strategy }, { upsert: true });
+  }
+
+  return strategy;
 }
 
 export async function updateStrategy(id, input = {}) {
+  const collection = await strategiesCollection();
+  if (collection) {
+    const existing = await collection.findOne({ id }, { projection: { _id: 0 } });
+    if (!existing) {
+      const error = new Error(`No existe estrategia ${id}.`);
+      error.status = 404;
+      throw error;
+    }
+
+    const strategy = {
+      ...existing,
+      ...normalizeStrategy({ ...existing, ...input }),
+      id,
+      createdAt: existing.createdAt,
+      updatedAt: new Date().toISOString()
+    };
+
+    await collection.updateOne({ id }, { $set: strategy });
+    return strategy;
+  }
+
   const store = await readStore();
   const existing = store.strategies[id];
   if (!existing) {
