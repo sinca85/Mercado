@@ -1,7 +1,8 @@
 {
   "rewrites": [
-    { "source": "/estrategias", "destination": "/api/index" },
-    { "source": "/estrategias/(.*)", "destination": "/api/index" },
-    { "source": "/cotizaciones", "destination": "/api/index" }
+    { "source": "/api/:path*", "destination": "/api/index?path=api/:path*" },
+    { "source": "/estrategias", "destination": "/api/index?path=estrategias" },
+    { "source": "/estrategias/:path*", "destination": "/api/index?path=estrategias/:path*" },
+    { "source": "/cotizaciones", "destination": "/api/index?path=cotizaciones" }
   ]
 }
