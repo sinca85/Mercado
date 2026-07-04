@@ -650,7 +650,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.7/babel.min.js"></script>
   <script type="text/babel">
     const { useEffect, useMemo, useRef, useState } = React;
-    const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Popconfirm, Select, Space, Spin, Switch, Table, Tag, message, theme } = antd;
+    const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Popconfirm, Select, Space, Spin, Switch, Table, Tag, Tooltip, message, theme } = antd;
     const { ReloadOutlined, SaveOutlined } = icons;
 
     const UNDERLYINGS = ['GGAL', 'YPFD', 'COME', 'PAMP', 'BMA', 'ALUA', 'SUPV'];
@@ -1097,54 +1097,62 @@
                 return (
                   <tr key={row.id || `${type}-${rowIndex}`} className={type === 'PUT' ? 'type-put' : 'type-call'}>
                     <td className="type-cell">{type}</td>
-                    {columns.map((column, colIndex) => (
-                      <td
-                        key={column.key}
-                        data-cell={`${rowIndex}-${colIndex}`}
-                        title={column.key === 'symbol' ? targetHighlights[String(row.symbol || '').toUpperCase()]?.title : undefined}
-                        className={`edit-cell ${column.key === 'symbol' ? 'symbol-cell' : ''} ${column.key === 'symbol' && targetHighlights[String(row.symbol || '').toUpperCase()] ? 'best-target-option' : ''} ${isSelected(rowIndex, colIndex) ? 'selected' : ''} ${isActive(rowIndex, colIndex) ? 'active' : ''} ${isEditing(rowIndex, colIndex) ? 'editing' : ''}`}
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          draggingRef.current = true;
-                          selectCell(rowIndex, colIndex);
-                          focusGrid();
-                        }}
-                        onMouseUp={() => {
-                          draggingRef.current = false;
-                        }}
-                        onDoubleClick={() => beginEdit(rowIndex, colIndex)}
-                        onMouseEnter={(event) => {
-                          if (draggingRef.current && event.buttons === 1) {
-                            setSelection((current) => ({ ...current, end: { row: rowIndex, col: colIndex } }));
-                          }
-                        }}
-                      >
-                        {isEditing(rowIndex, colIndex) ? (
-                          <>
-                            <input
-                              ref={editInputRef}
-                              className={column.key === 'symbol' ? 'symbol-input' : ''}
-                              value={row[column.key] ?? ''}
-                              list={column.key === 'symbol' ? `${gridIdRef.current}-${type}` : undefined}
-                              onChange={(event) => changeCell(rowIndex, column.key, event.target.value)}
-                              onKeyDown={(event) => handleInputKeyDown(event, rowIndex, colIndex)}
-                              onBlur={() => stopEdit({ focusBack: false })}
-                            />
-                            {column.key === 'symbol' ? (
-                              <div className="symbol-menu" onMouseDown={(event) => event.preventDefault()}>
-                                {(optionsByType[type] || []).map((item) => (
-                                  <button key={item.value} type="button" onClick={() => pickSymbol(rowIndex, item.value)}>
-                                    {item.label}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
-                          </>
-                        ) : (
-                          <span>{row[column.key] ?? ''}</span>
-                        )}
-                      </td>
-                    ))}
+                    {columns.map((column, colIndex) => {
+                      const highlight = column.key === 'symbol'
+                        ? targetHighlights[String(row.symbol || '').toUpperCase()]
+                        : null;
+                      return (
+                        <td
+                          key={column.key}
+                          data-cell={`${rowIndex}-${colIndex}`}
+                          className={`edit-cell ${column.key === 'symbol' ? 'symbol-cell' : ''} ${highlight ? 'best-target-option' : ''} ${isSelected(rowIndex, colIndex) ? 'selected' : ''} ${isActive(rowIndex, colIndex) ? 'active' : ''} ${isEditing(rowIndex, colIndex) ? 'editing' : ''}`}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            draggingRef.current = true;
+                            selectCell(rowIndex, colIndex);
+                            focusGrid();
+                          }}
+                          onMouseUp={() => {
+                            draggingRef.current = false;
+                          }}
+                          onDoubleClick={() => beginEdit(rowIndex, colIndex)}
+                          onMouseEnter={(event) => {
+                            if (draggingRef.current && event.buttons === 1) {
+                              setSelection((current) => ({ ...current, end: { row: rowIndex, col: colIndex } }));
+                            }
+                          }}
+                        >
+                          {isEditing(rowIndex, colIndex) ? (
+                            <>
+                              <input
+                                ref={editInputRef}
+                                className={column.key === 'symbol' ? 'symbol-input' : ''}
+                                value={row[column.key] ?? ''}
+                                list={column.key === 'symbol' ? `${gridIdRef.current}-${type}` : undefined}
+                                onChange={(event) => changeCell(rowIndex, column.key, event.target.value)}
+                                onKeyDown={(event) => handleInputKeyDown(event, rowIndex, colIndex)}
+                                onBlur={() => stopEdit({ focusBack: false })}
+                              />
+                              {column.key === 'symbol' ? (
+                                <div className="symbol-menu" onMouseDown={(event) => event.preventDefault()}>
+                                  {(optionsByType[type] || []).map((item) => (
+                                    <button key={item.value} type="button" onClick={() => pickSymbol(rowIndex, item.value)}>
+                                      {item.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </>
+                          ) : highlight ? (
+                            <Tooltip title={highlight.title} mouseEnterDelay={0} mouseLeaveDelay={0}>
+                              <span>{row[column.key] ?? ''}</span>
+                            </Tooltip>
+                          ) : (
+                            <span>{row[column.key] ?? ''}</span>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
