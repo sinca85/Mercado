@@ -783,10 +783,11 @@
         .filter((cells) => cells.some(Boolean));
     }
 
-    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumns = [], onCellFocus }) {
+    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus }) {
       const columns = [
         { key: 'quantity', title: 'CANT', editable: true },
         { key: 'symbol', title: 'BASE', editable: true },
+        ...extraColumnsAfterSymbol.map((column) => ({ ...column, editable: false })),
         { key: 'premium', title: premiumTitle, editable: true },
         ...extraColumns.map((column) => ({ ...column, editable: false }))
       ];
@@ -1529,6 +1530,7 @@
 
       const strategyRowsWithTarget = legsWithResults.map((leg) => ({
         ...leg,
+        autoIv: leg.result?.impliedVolatility ? formatPercent(leg.result.impliedVolatility) : '',
         targetPremium: targetPremiumForLeg(leg)
       }));
 
@@ -1850,6 +1852,7 @@
                 rows={strategyRowsWithTarget}
                 getRowType={(row) => row.type}
                 optionsByType={optionSelectOptionsByType}
+                extraColumnsAfterSymbol={[{ key: 'autoIv', title: 'VI AUTO' }]}
                 extraColumns={[{ key: 'targetPremium', title: 'PRIMA TARGET' }]}
                 onUpdate={(rowIndex, patch) => updateLeg(originalIndexById.get(strategyRowsWithTarget[rowIndex].id), patch)}
               />
