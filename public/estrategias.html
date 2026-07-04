@@ -534,6 +534,32 @@
       text-align: center;
     }
 
+    .sheet-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 5px 8px;
+      background: #366291;
+      border: 2px solid #111;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 950;
+    }
+
+    .sheet-title-row .sheet-title-text {
+      min-width: 160px;
+      text-align: center;
+    }
+
+    .range-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
     .ant-input,
     .ant-input-number,
     .ant-input-number-input,
@@ -1137,6 +1163,7 @@
       const [autoSaving, setAutoSaving] = useState(false);
       const [payload, setPayload] = useState(null);
       const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
+      const [strategyRange, setStrategyRange] = useState({ from: null, to: null });
       const recalcTimerRef = useRef(null);
 
       async function loadStrategy(strategyId = id, { force = false } = {}) {
@@ -1162,6 +1189,10 @@
       useEffect(() => {
         onStrategyNameChange?.(payload?.strategy?.name || '');
       }, [payload?.strategy?.name, onStrategyNameChange]);
+
+      useEffect(() => {
+        setStrategyRange({ from: null, to: null });
+      }, [payload?.strategy?.underlying, payload?.strategy?.monthCode]);
 
       async function createStrategy(values) {
         try {
@@ -1345,6 +1376,60 @@
         if (option.optionType === 'PUT') row.put = option;
       }
       const baseRows = Array.from(optionsByStrike.values()).sort((a, b) => a.strike - b.strike);
+      const monthLabel = MONTHS.find((item) => item.value === strategy.monthCode)?.label || strategy.monthCode;
+      const rangeBaseOptions = baseRows.map((row) => ({
+        value: row.strike,
+        label: `${strategy.underlying} ${formatNumber(row.strike, 0)} ${monthLabel}`
+      }));
+
+      function optionPremium(option, fallback = '') {
+        if (!option) return fallback;
+        return option.last || option.ask || option.bid || fallback;
+      }
+
+      function buildRangeLegs(type, selectedRows) {
+        const existingBySymbol = new Map(
+          fixedLegs
+            .filter((leg) => leg.type === type && leg.symbol)
+            .map((leg) => [leg.symbol, leg])
+        );
+        const rows = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => {
+          const option = selectedRows[index]?.[type.toLowerCase()];
+          const existing = option ? existingBySymbol.get(option.symbol) : null;
+          return {
+            id: `${type.toLowerCase()}-${index + 1}`,
+            type,
+            quantity: existing?.quantity ?? '',
+            symbol: option?.symbol || '',
+            premium: option ? optionPremium(option, existing?.premium ?? '') : '',
+            manualPrice: existing?.manualPrice ?? ''
+          };
+        });
+        return rows;
+      }
+
+      function applyStrategyRange(nextRange) {
+        setStrategyRange(nextRange);
+        if (nextRange.from === null || nextRange.to === null) return;
+        const from = Math.min(Number(nextRange.from), Number(nextRange.to));
+        const to = Math.max(Number(nextRange.from), Number(nextRange.to));
+        const selectedRows = baseRows.filter((row) => row.strike >= from && row.strike <= to);
+        if (!selectedRows.length) {
+          message.info('No hay bases en ese rango.');
+          return;
+        }
+        if (selectedRows.length > STRATEGY_ROWS_PER_SIDE) {
+          message.warning(`El rango tiene ${selectedRows.length} bases. Se cargan las primeras ${STRATEGY_ROWS_PER_SIDE}.`);
+        }
+        const clippedRows = selectedRows.slice(0, STRATEGY_ROWS_PER_SIDE);
+        const legs = [
+          ...buildRangeLegs('CALL', clippedRows),
+          ...buildRangeLegs('PUT', clippedRows)
+        ];
+        strategy.legs = legs;
+        applyStrategyChange({ ...strategy, legs });
+      }
+
       const simulationRows = calculation.percentScenarios || [];
       const legColumns = [
         {
@@ -1613,7 +1698,35 @@
 
           <div className="spreadsheet-grid">
             <section className="panel">
-              <div className="sheet-title">Simulaciones ↓</div>
+              <div className="sheet-title-row">
+                <span className="sheet-title-text">Simulaciones ↓</span>
+                <div className="range-controls">
+                  <span>Desde</span>
+                  <Select
+                    size="small"
+                    showSearch
+                    allowClear
+                    value={strategyRange.from ?? undefined}
+                    placeholder="Base"
+                    style={{ width: 165 }}
+                    options={rangeBaseOptions}
+                    optionFilterProp="label"
+                    onChange={(from) => applyStrategyRange({ ...strategyRange, from: from ?? null })}
+                  />
+                  <span>Hasta</span>
+                  <Select
+                    size="small"
+                    showSearch
+                    allowClear
+                    value={strategyRange.to ?? undefined}
+                    placeholder="Base"
+                    style={{ width: 165 }}
+                    options={rangeBaseOptions}
+                    optionFilterProp="label"
+                    onChange={(to) => applyStrategyRange({ ...strategyRange, to: to ?? null })}
+                  />
+                </div>
+              </div>
               <div className="panel-header" style={{ minHeight: 34 }}>
                 <div className="panel-title">Carga de estrategia</div>
                 <Space size={6}>
