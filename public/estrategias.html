@@ -294,6 +294,15 @@
       background: #a8d4df;
     }
 
+    .input-grid .edit-cell.best-target-option {
+      background: #bff0c8;
+      color: #053d18;
+    }
+
+    .input-grid .edit-cell.best-target-option.selected {
+      background: #a7e9b4;
+    }
+
     .input-grid .edit-cell.active {
       box-shadow: inset 0 0 0 2px #050505;
     }
@@ -647,6 +656,7 @@
     const UNDERLYINGS = ['GGAL', 'YPFD', 'COME', 'PAMP', 'BMA', 'ALUA', 'SUPV'];
     const DEFAULT_STRATEGY_ROWS_PER_SIDE = 10;
     const HISTORY_ROWS_PER_SIDE = 24;
+    const BEST_TARGET_TOLERANCE = 0.05;
     const MONTHS = [
       { value: 'AG', label: 'Agosto' },
       { value: 'OC', label: 'Octubre' },
@@ -660,6 +670,20 @@
       const numeric = Number(value);
       if (!Number.isFinite(numeric)) return '-';
       return new Intl.NumberFormat('es-AR', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(numeric);
+    }
+
+    function parseNumeric(value) {
+      if (value === null || value === undefined || value === '') return null;
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      const raw = String(value).trim();
+      if (!raw) return null;
+      const hasComma = raw.includes(',');
+      const hasDot = raw.includes('.');
+      let normalized = raw;
+      if (hasComma) normalized = raw.replace(/\./g, '').replace(',', '.');
+      else if (hasDot && raw.split('.').length > 2) normalized = raw.replace(/\./g, '');
+      const numeric = Number(normalized);
+      return Number.isFinite(numeric) ? numeric : null;
     }
 
     function formatMoney(value) {
@@ -799,7 +823,7 @@
         .filter((cells) => cells.some(Boolean));
     }
 
-    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest }) {
+    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest, targetHighlights = {} }) {
       const columns = [
         { key: 'quantity', title: 'CANT', editable: true },
         { key: 'symbol', title: 'BASE', editable: true },
@@ -1077,7 +1101,8 @@
                       <td
                         key={column.key}
                         data-cell={`${rowIndex}-${colIndex}`}
-                        className={`edit-cell ${column.key === 'symbol' ? 'symbol-cell' : ''} ${isSelected(rowIndex, colIndex) ? 'selected' : ''} ${isActive(rowIndex, colIndex) ? 'active' : ''} ${isEditing(rowIndex, colIndex) ? 'editing' : ''}`}
+                        title={column.key === 'symbol' ? targetHighlights[String(row.symbol || '').toUpperCase()]?.title : undefined}
+                        className={`edit-cell ${column.key === 'symbol' ? 'symbol-cell' : ''} ${column.key === 'symbol' && targetHighlights[String(row.symbol || '').toUpperCase()] ? 'best-target-option' : ''} ${isSelected(rowIndex, colIndex) ? 'selected' : ''} ${isActive(rowIndex, colIndex) ? 'active' : ''} ${isEditing(rowIndex, colIndex) ? 'editing' : ''}`}
                         onMouseDown={(event) => {
                           event.preventDefault();
                           draggingRef.current = true;
@@ -1574,6 +1599,16 @@
         return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
       }
 
+      function currentPremiumForLeg(leg) {
+        const contract = contractForLeg(leg);
+        return parseNumeric(leg.premium)
+          ?? parseNumeric(leg.result?.currentPrice)
+          ?? parseNumeric(contract?.mark)
+          ?? parseNumeric(contract?.last)
+          ?? parseNumeric(contract?.ask)
+          ?? parseNumeric(contract?.bid);
+      }
+
       const strategyRowsWithTarget = legsWithResults.map((leg) => {
         const autoIv = autoIvForLeg(leg);
         return {
@@ -1582,6 +1617,45 @@
           targetPremium: targetPremiumForLeg(leg)
         };
       });
+
+      const bestTargetHighlights = (() => {
+        const targetSpot = parseNumeric(strategy.targetSpot);
+        if (!(targetSpot > 0)) return {};
+
+        const candidates = strategyRowsWithTarget
+          .map((row) => {
+            const type = String(row.type || '').toUpperCase();
+            const contract = contractForLeg(row);
+            const strike = parseNumeric(row.result?.strike) ?? parseNumeric(contract?.strike);
+            const premium = currentPremiumForLeg(row);
+            if (!row.symbol || !['CALL', 'PUT'].includes(type) || !(strike > 0) || !(premium > 0)) return null;
+            const valueAtTarget = type === 'PUT'
+              ? Math.max(strike - targetSpot, 0)
+              : Math.max(targetSpot - strike, 0);
+            const gain = valueAtTarget - premium;
+            const performance = gain / premium;
+            if (!(performance > 0)) return null;
+            return {
+              symbol: String(row.symbol).toUpperCase(),
+              performance,
+              valueAtTarget,
+              gain
+            };
+          })
+          .filter(Boolean);
+
+        if (!candidates.length) return {};
+        const bestPerformance = Math.max(...candidates.map((candidate) => candidate.performance));
+        const threshold = bestPerformance * (1 - BEST_TARGET_TOLERANCE);
+
+        return candidates.reduce((highlights, candidate) => {
+          if (candidate.performance < threshold) return highlights;
+          highlights[candidate.symbol] = {
+            title: `Mejor rendimiento estimado para spot target: ${formatNumber(candidate.performance * 100, 1)}%`
+          };
+          return highlights;
+        }, {});
+      })();
 
       function focusNearestStrategyBase(targetPrice) {
         updateMeta({ targetSpot: targetPrice });
@@ -1939,6 +2013,7 @@
                 extraColumns={[{ key: 'targetPremium', title: 'PRIMA TARGET' }]}
                 onUpdate={(rowIndex, patch) => updateLeg(originalIndexById.get(strategyRowsWithTarget[rowIndex].id), patch)}
                 focusRequest={strategyGridFocus}
+                targetHighlights={bestTargetHighlights}
               />
             </section>
 
