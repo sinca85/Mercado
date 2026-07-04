@@ -1545,11 +1545,12 @@
         const targetSpot = Number(strategy.targetSpot);
         if (!(targetSpot > 0) || !leg.symbol) return '';
         const result = leg.result;
-        const contract = result?.contract || chainOptions.find((option) => option.symbol === leg.symbol);
+        const contract = contractForLeg(leg);
         const strike = Number(result?.strike || contract?.strike);
         if (!(strike > 0)) return '';
-        const volatility = strategy.useAutoIv && result?.impliedVolatility
-          ? Number(result.impliedVolatility)
+        const autoIv = autoIvForLeg(leg);
+        const volatility = strategy.useAutoIv && autoIv
+          ? autoIv
           : Number(strategy.volatility || 0.4);
         const price = blackScholesPrice({
           type: leg.type,
@@ -1562,17 +1563,31 @@
         return Number.isFinite(price) ? formatNumber(price, 3) : '';
       }
 
-      const strategyRowsWithTarget = legsWithResults.map((leg) => ({
-        ...leg,
-        autoIv: leg.result?.impliedVolatility ? formatPercent(leg.result.impliedVolatility) : '',
-        targetPremium: targetPremiumForLeg(leg)
-      }));
+      function contractForLeg(leg) {
+        const symbol = String(leg.symbol || '').toUpperCase();
+        return leg.result?.contract || chainOptions.find((option) => option.symbol === symbol);
+      }
+
+      function autoIvForLeg(leg) {
+        const iv = leg.result?.impliedVolatility ?? contractForLeg(leg)?.impliedVolatility;
+        const numeric = Number(iv);
+        return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+      }
+
+      const strategyRowsWithTarget = legsWithResults.map((leg) => {
+        const autoIv = autoIvForLeg(leg);
+        return {
+          ...leg,
+          autoIv: autoIv ? formatPercent(autoIv) : '',
+          targetPremium: targetPremiumForLeg(leg)
+        };
+      });
 
       function focusNearestStrategyBase(targetPrice) {
         updateMeta({ targetSpot: targetPrice });
         const rowsWithStrike = strategyRowsWithTarget
           .map((row, index) => {
-            const contract = row.result?.contract || chainOptions.find((option) => option.symbol === row.symbol);
+            const contract = contractForLeg(row);
             return { index, strike: Number(row.result?.strike || contract?.strike) };
           })
           .filter((item) => Number.isFinite(item.strike) && item.strike > 0);
