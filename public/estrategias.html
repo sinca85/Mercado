@@ -1193,8 +1193,19 @@
       }, [payload?.strategy?.name, onStrategyNameChange]);
 
       useEffect(() => {
-        setStrategyRange({ from: null, to: null });
-      }, [payload?.strategy?.underlying, payload?.strategy?.monthCode]);
+        const options = payload?.chain?.options || [];
+        const strikeBySymbol = new Map(options.map((option) => [option.symbol, option.strike]));
+        const loadedStrikes = (payload?.strategy?.legs || [])
+          .map((leg) => strikeBySymbol.get(leg.symbol))
+          .filter((strike) => Number.isFinite(Number(strike)));
+        if (!loadedStrikes.length) {
+          setStrategyRange({ from: null, to: null });
+          return;
+        }
+        const from = Math.min(...loadedStrikes);
+        const to = Math.max(...loadedStrikes);
+        setStrategyRange((current) => current.from === from && current.to === to ? current : { from, to });
+      }, [payload?.strategy?.legs, payload?.strategy?.underlying, payload?.strategy?.monthCode, payload?.chain?.options]);
 
       async function createStrategy(values) {
         try {
