@@ -1704,7 +1704,7 @@
           title: '%',
           dataIndex: 'percent',
           width: 72,
-          onCell: (row) => ({ className: row.percent < -10 ? 'sim-negative' : row.percent === 0 ? 'sim-zero' : row.percent > 10 ? 'sim-warn' : 'sim-positive' }),
+          onCell: (row) => ({ className: row.percent < 0 ? 'sim-negative' : row.percent === 0 ? 'sim-zero' : 'sim-positive' }),
           render: (value) => `${value}%`
         },
         {

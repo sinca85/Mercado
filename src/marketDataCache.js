@@ -1,9 +1,9 @@
 import { MongoClient } from 'mongodb';
 
 const DEFAULT_DB_NAME = 'iol_market_data_lab';
-const DEFAULT_TTL_MINUTES = 20;
-const DEFAULT_MARKET_START_HOUR = 11;
-const DEFAULT_MARKET_END_HOUR = 17;
+const DEFAULT_TTL_MINUTES = 10;
+const DEFAULT_MARKET_START_HOUR = 10;
+const DEFAULT_MARKET_END_HOUR = 18;
 const DEFAULT_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 
 const memoryCache = new Map();
@@ -124,6 +124,26 @@ export async function getCachedMarketData({ key, kind, loader, force = false, al
   const clock = marketClock();
   const cached = await readCache(key);
   const stale = !cached || ageMs(cached) > ttlMs;
+
+  if (!clock.isOpen && allowStaleOutsideMarket) {
+    if (cached) {
+      return {
+        data: cached.data,
+        cache: {
+          hit: true,
+          stale,
+          source: 'cache-outside-market',
+          fetchedAt: cached.fetchedAt,
+          marketOpen: false,
+          key
+        }
+      };
+    }
+    const error = new Error(`No hay datos cacheados para ${key} y el mercado esta cerrado.`);
+    error.status = 503;
+    throw error;
+  }
+
   const canRefresh = force || clock.isOpen || !cached || !allowStaleOutsideMarket;
 
   if (cached && (!stale || !canRefresh)) {

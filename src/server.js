@@ -194,12 +194,19 @@ app.get('/api/options/:symbol', async (req, res) => {
   try {
     const market = String(req.query.market || 'BCBA');
     const symbol = String(req.params.symbol || '').trim();
-    const data = await getUnderlyingOptions({ market, symbol });
+    const force = req.query.force === '1' || req.query.force === 'true';
+    const { data, cache } = await getCachedMarketData({
+      key: `underlying-options:${market}:${symbol.toUpperCase()}`,
+      kind: 'underlying-options',
+      force,
+      loader: () => getUnderlyingOptions({ market, symbol })
+    });
 
     res.json({
       ok: true,
       requested: { market, symbol: symbol.toUpperCase() },
       receivedAt: new Date().toISOString(),
+      cache,
       data
     });
   } catch (error) {
@@ -491,7 +498,7 @@ app.get(['/', '/estrategias', '/estrategias/:id', '/:id'], (_req, res) => {
 function startServer() {
   app.listen(port, () => {
     console.log(`IOL Market Data Lab escuchando en http://localhost:${port}`);
-    const refreshMs = Math.max(1, Number(process.env.MARKET_CACHE_INTERVAL_MINUTES || 20)) * 60_000;
+    const refreshMs = Math.max(1, Number(process.env.MARKET_CACHE_INTERVAL_MINUTES || 10)) * 60_000;
     setInterval(refreshMarketSnapshot, refreshMs).unref();
     refreshMarketSnapshot();
   });
