@@ -799,7 +799,7 @@
         .filter((cells) => cells.some(Boolean));
     }
 
-    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus }) {
+    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest }) {
       const columns = [
         { key: 'quantity', title: 'CANT', editable: true },
         { key: 'symbol', title: 'BASE', editable: true },
@@ -877,6 +877,22 @@
       function focusGrid() {
         requestAnimationFrame(() => wrapRef.current?.focus({ preventScroll: true }));
       }
+
+      useEffect(() => {
+        if (!focusRequest || !rows.length) return;
+        const requestedRow = Number(focusRequest.row);
+        const requestedCol = Number(focusRequest.col ?? 0);
+        if (!Number.isFinite(requestedRow) || !Number.isFinite(requestedCol)) return;
+        const next = clampCell(requestedRow, requestedCol);
+        setEditingCell(null);
+        setSelection({ start: next, end: next });
+        onCellFocus?.(next.row, next.col);
+        requestAnimationFrame(() => {
+          const cell = wrapRef.current?.querySelector(`[data-cell="${next.row}-${next.col}"]`);
+          cell?.scrollIntoView({ block: 'center', inline: 'nearest' });
+          wrapRef.current?.focus({ preventScroll: true });
+        });
+      }, [focusRequest?.token]);
 
       function clampCell(rowIndex, colIndex) {
         return {
@@ -1060,6 +1076,7 @@
                     {columns.map((column, colIndex) => (
                       <td
                         key={column.key}
+                        data-cell={`${rowIndex}-${colIndex}`}
                         className={`edit-cell ${column.key === 'symbol' ? 'symbol-cell' : ''} ${isSelected(rowIndex, colIndex) ? 'selected' : ''} ${isActive(rowIndex, colIndex) ? 'active' : ''} ${isEditing(rowIndex, colIndex) ? 'editing' : ''}`}
                         onMouseDown={(event) => {
                           event.preventDefault();
@@ -1249,6 +1266,7 @@
       const [payload, setPayload] = useState(null);
       const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
       const [strategyRange, setStrategyRange] = useState({ from: null, to: null });
+      const [strategyGridFocus, setStrategyGridFocus] = useState(null);
       const recalcTimerRef = useRef(null);
 
       async function loadStrategy(strategyId = id, { force = false } = {}) {
@@ -1550,6 +1568,36 @@
         targetPremium: targetPremiumForLeg(leg)
       }));
 
+      function focusNearestStrategyBase(targetPrice) {
+        updateMeta({ targetSpot: targetPrice });
+        const rowsWithStrike = strategyRowsWithTarget
+          .map((row, index) => {
+            const contract = row.result?.contract || chainOptions.find((option) => option.symbol === row.symbol);
+            return { index, strike: Number(row.result?.strike || contract?.strike) };
+          })
+          .filter((item) => Number.isFinite(item.strike) && item.strike > 0);
+
+        if (!rowsWithStrike.length) {
+          message.info('No hay bases cargadas para enfocar.');
+          return;
+        }
+
+        const nearest = rowsWithStrike.reduce((best, item) => {
+          if (!best) return item;
+          const bestDistance = Math.abs(best.strike - targetPrice);
+          const itemDistance = Math.abs(item.strike - targetPrice);
+          if (itemDistance < bestDistance) return item;
+          if (itemDistance === bestDistance && item.strike > best.strike) return item;
+          return best;
+        }, null);
+
+        setStrategyGridFocus({
+          row: nearest.index,
+          col: 0,
+          token: `${nearest.index}-${targetPrice}-${Date.now()}`
+        });
+      }
+
       const simulationRows = calculation.percentScenarios || [];
       const legColumns = [
         {
@@ -1712,7 +1760,7 @@
           dataIndex: 'underlyingPrice',
           width: 105,
           render: (value) => (
-            <button type="button" className="target-price-button" onClick={() => updateMeta({ targetSpot: value })}>
+            <button type="button" className="target-price-button" onClick={() => focusNearestStrategyBase(value)}>
               {formatNumber(value, 2)}
             </button>
           )
@@ -1875,6 +1923,7 @@
                 extraColumnsAfterSymbol={[{ key: 'autoIv', title: 'VI AUTO' }]}
                 extraColumns={[{ key: 'targetPremium', title: 'PRIMA TARGET' }]}
                 onUpdate={(rowIndex, patch) => updateLeg(originalIndexById.get(strategyRowsWithTarget[rowIndex].id), patch)}
+                focusRequest={strategyGridFocus}
               />
             </section>
 
