@@ -5,7 +5,7 @@ import { MongoClient } from 'mongodb';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const STORE_PATH = path.join(DATA_DIR, 'strategies.json');
-const STRATEGY_ROWS_PER_SIDE = 12;
+const DEFAULT_STRATEGY_ROWS_PER_SIDE = 10;
 const HISTORY_ROWS_PER_SIDE = 24;
 const DEFAULT_DB_NAME = 'iol_market_data_lab';
 
@@ -59,7 +59,7 @@ function makeId() {
 }
 
 function makeDefaultLegs() {
-  const calls = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => ({
+  const calls = Array.from({ length: DEFAULT_STRATEGY_ROWS_PER_SIDE }, (_item, index) => ({
     id: `call-${index + 1}`,
     type: 'CALL',
     quantity: '',
@@ -67,7 +67,7 @@ function makeDefaultLegs() {
     premium: '',
     manualPrice: ''
   }));
-  const puts = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => ({
+  const puts = Array.from({ length: DEFAULT_STRATEGY_ROWS_PER_SIDE }, (_item, index) => ({
     id: `put-${index + 1}`,
     type: 'PUT',
     quantity: '',
@@ -80,10 +80,15 @@ function makeDefaultLegs() {
 
 function normalizeLegs(inputLegs) {
   const incoming = Array.isArray(inputLegs) ? inputLegs : [];
-  const fallback = makeDefaultLegs();
   const byId = new Map(incoming.map((leg) => [leg.id, leg]));
   const legacyCalls = incoming.filter((leg) => String(leg.type || '').toUpperCase() === 'CALL' && !String(leg.id || '').startsWith('call-'));
   const legacyPuts = incoming.filter((leg) => String(leg.type || '').toUpperCase() === 'PUT' && !String(leg.id || '').startsWith('put-'));
+  const callCount = Math.max(DEFAULT_STRATEGY_ROWS_PER_SIDE, incoming.filter((leg) => String(leg.type || '').toUpperCase() === 'CALL').length);
+  const putCount = Math.max(DEFAULT_STRATEGY_ROWS_PER_SIDE, incoming.filter((leg) => String(leg.type || '').toUpperCase() === 'PUT').length);
+  const fallback = [
+    ...Array.from({ length: callCount }, (_item, index) => ({ id: `call-${index + 1}`, type: 'CALL', quantity: '', symbol: '', premium: '', manualPrice: '' })),
+    ...Array.from({ length: putCount }, (_item, index) => ({ id: `put-${index + 1}`, type: 'PUT', quantity: '', symbol: '', premium: '', manualPrice: '' }))
+  ];
 
   return fallback.map((emptyLeg, index) => {
     const legacy = emptyLeg.type === 'CALL' ? legacyCalls.shift() : legacyPuts.shift();

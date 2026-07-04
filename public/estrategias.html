@@ -598,7 +598,7 @@
     const { ReloadOutlined, SaveOutlined } = icons;
 
     const UNDERLYINGS = ['GGAL', 'YPFD', 'COME', 'PAMP', 'BMA', 'ALUA', 'SUPV'];
-    const STRATEGY_ROWS_PER_SIDE = 12;
+    const DEFAULT_STRATEGY_ROWS_PER_SIDE = 10;
     const HISTORY_ROWS_PER_SIDE = 24;
     const MONTHS = [
       { value: 'AG', label: 'Agosto' },
@@ -650,12 +650,14 @@
       const byId = new Map(existingLegs.map((leg) => [leg.id, leg]));
       const legacyCalls = existingLegs.filter((leg) => String(leg.type || '').toUpperCase() === 'CALL' && !String(leg.id || '').startsWith('call-'));
       const legacyPuts = existingLegs.filter((leg) => String(leg.type || '').toUpperCase() === 'PUT' && !String(leg.id || '').startsWith('put-'));
-      const calls = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => {
+      const callCount = Math.max(DEFAULT_STRATEGY_ROWS_PER_SIDE, existingLegs.filter((leg) => String(leg.type || '').toUpperCase() === 'CALL').length);
+      const putCount = Math.max(DEFAULT_STRATEGY_ROWS_PER_SIDE, existingLegs.filter((leg) => String(leg.type || '').toUpperCase() === 'PUT').length);
+      const calls = Array.from({ length: callCount }, (_item, index) => {
         const id = `call-${index + 1}`;
         const leg = byId.get(id) || legacyCalls.shift() || {};
         return { id, type: 'CALL', quantity: leg.quantity ?? '', symbol: leg.symbol || '', premium: leg.premium ?? '', manualPrice: leg.manualPrice ?? '' };
       });
-      const puts = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => {
+      const puts = Array.from({ length: putCount }, (_item, index) => {
         const id = `put-${index + 1}`;
         const leg = byId.get(id) || legacyPuts.shift() || {};
         return { id, type: 'PUT', quantity: leg.quantity ?? '', symbol: leg.symbol || '', premium: leg.premium ?? '', manualPrice: leg.manualPrice ?? '' };
@@ -1393,7 +1395,8 @@
             .filter((leg) => leg.type === type && leg.symbol)
             .map((leg) => [leg.symbol, leg])
         );
-        const rows = Array.from({ length: STRATEGY_ROWS_PER_SIDE }, (_item, index) => {
+        const rowCount = Math.max(DEFAULT_STRATEGY_ROWS_PER_SIDE, selectedRows.length);
+        const rows = Array.from({ length: rowCount }, (_item, index) => {
           const option = selectedRows[index]?.[type.toLowerCase()];
           const existing = option ? existingBySymbol.get(option.symbol) : null;
           return {
@@ -1418,13 +1421,9 @@
           message.info('No hay bases en ese rango.');
           return;
         }
-        if (selectedRows.length > STRATEGY_ROWS_PER_SIDE) {
-          message.warning(`El rango tiene ${selectedRows.length} bases. Se cargan las primeras ${STRATEGY_ROWS_PER_SIDE}.`);
-        }
-        const clippedRows = selectedRows.slice(0, STRATEGY_ROWS_PER_SIDE);
         const legs = [
-          ...buildRangeLegs('CALL', clippedRows),
-          ...buildRangeLegs('PUT', clippedRows)
+          ...buildRangeLegs('CALL', selectedRows),
+          ...buildRangeLegs('PUT', selectedRows)
         ];
         strategy.legs = legs;
         applyStrategyChange({ ...strategy, legs });
