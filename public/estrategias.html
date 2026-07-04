@@ -625,6 +625,37 @@
       return `${formatNumber(numeric * 100, 1)}%`;
     }
 
+    function erf(x) {
+      const sign = x < 0 ? -1 : 1;
+      const absX = Math.abs(x);
+      const t = 1 / (1 + 0.3275911 * absX);
+      const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-absX * absX);
+      return sign * y;
+    }
+
+    function normalCdf(x) {
+      return 0.5 * (1 + erf(x / Math.SQRT2));
+    }
+
+    function blackScholesPrice({ type, spot, strike, years, volatility, rate }) {
+      if (!(spot > 0) || !(strike > 0) || !(years > 0) || !(volatility > 0)) {
+        return type === 'PUT' ? Math.max(strike - spot, 0) : Math.max(spot - strike, 0);
+      }
+      const sqrtT = Math.sqrt(years);
+      const d1 = (Math.log(spot / strike) + (rate + (volatility * volatility) / 2) * years) / (volatility * sqrtT);
+      const d2 = d1 - volatility * sqrtT;
+      const discount = Math.exp(-rate * years);
+      return type === 'PUT'
+        ? strike * discount * normalCdf(-d2) - spot * normalCdf(-d1)
+        : spot * normalCdf(d1) - strike * discount * normalCdf(d2);
+    }
+
+    function yearsToExpiration(expiration) {
+      if (!expiration) return 50 / 365;
+      const expiry = new Date(`${expiration}T21:00:00.000Z`);
+      return Math.max(1, Math.ceil((expiry.getTime() - Date.now()) / 86400000)) / 365;
+    }
+
     function getStrategyIdFromPath() {
       const parts = window.location.pathname.split('/').filter(Boolean);
       if (parts[0] === 'estrategias' && parts[1]) return parts[1];
@@ -721,11 +752,12 @@
         .filter((cells) => cells.some(Boolean));
     }
 
-    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', onCellFocus }) {
+    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumns = [], onCellFocus }) {
       const columns = [
-        { key: 'quantity', title: 'CANT' },
-        { key: 'symbol', title: 'BASE' },
-        { key: 'premium', title: premiumTitle }
+        { key: 'quantity', title: 'CANT', editable: true },
+        { key: 'symbol', title: 'BASE', editable: true },
+        { key: 'premium', title: premiumTitle, editable: true },
+        ...extraColumns.map((column) => ({ ...column, editable: false }))
       ];
       const [selection, setSelection] = useState({ start: { row: 0, col: 0 }, end: { row: 0, col: 0 } });
       const [editingCell, setEditingCell] = useState(null);
@@ -814,7 +846,7 @@
 
       function beginEdit(rowIndex, colIndex, replacement = null) {
         const column = columns[colIndex];
-        if (!column) return;
+        if (!column?.editable) return;
         if (replacement !== null) changeCell(rowIndex, column.key, replacement);
         setSelection({ start: { row: rowIndex, col: colIndex }, end: { row: rowIndex, col: colIndex } });
         setEditingCell({ row: rowIndex, col: colIndex, selectAll: replacement === null });
@@ -861,7 +893,7 @@
           cells.forEach((cellValue, pasteColIndex) => {
             const targetColIndex = start.col + pasteColIndex;
             const column = columns[targetColIndex];
-            if (!column) return;
+            if (!column?.editable) return;
             const patch = { [column.key]: column.key === 'symbol' ? String(cellValue || '').toUpperCase() : cellValue };
             onUpdate(targetRowIndex, patch);
           });
@@ -869,6 +901,7 @@
       }
 
       function changeCell(rowIndex, columnKey, value) {
+        if (!columns.find((column) => column.key === columnKey)?.editable) return;
         const patch = { [columnKey]: columnKey === 'symbol' ? String(value || '').toUpperCase() : value };
         const type = getRowType(rows[rowIndex]);
         if (columnKey === 'symbol') {
@@ -920,12 +953,14 @@
           const range = bounds();
           for (let rowIndex = range.minRow; rowIndex <= range.maxRow; rowIndex += 1) {
             for (let colIndex = range.minCol; colIndex <= range.maxCol; colIndex += 1) {
+              if (!columns[colIndex]?.editable) continue;
               onUpdate(rowIndex, { [columns[colIndex].key]: '' });
             }
           }
         } else if (event.key.length === 1 && !event.altKey && !event.metaKey && !event.ctrlKey) {
           event.preventDefault();
           const column = columns[active.col];
+          if (!column?.editable) return;
           const nextValue = column.key === 'symbol' ? event.key.toUpperCase() : event.key;
           beginEdit(active.row, active.col, nextValue);
         }
@@ -1440,6 +1475,32 @@
         applyStrategyChange({ ...strategy, legs });
       }
 
+      function targetPremiumForLeg(leg) {
+        const targetSpot = Number(strategy.targetSpot);
+        if (!(targetSpot > 0) || !leg.symbol) return '';
+        const result = leg.result;
+        const contract = result?.contract || chainOptions.find((option) => option.symbol === leg.symbol);
+        const strike = Number(result?.strike || contract?.strike);
+        if (!(strike > 0)) return '';
+        const volatility = strategy.useAutoIv && result?.impliedVolatility
+          ? Number(result.impliedVolatility)
+          : Number(strategy.volatility || 0.4);
+        const price = blackScholesPrice({
+          type: leg.type,
+          spot: targetSpot,
+          strike,
+          years: yearsToExpiration(contract?.expiration || strategy.expiration),
+          volatility,
+          rate: Number(strategy.riskFreeRate || 0.125)
+        });
+        return Number.isFinite(price) ? formatNumber(price, 3) : '';
+      }
+
+      const strategyRowsWithTarget = legsWithResults.map((leg) => ({
+        ...leg,
+        targetPremium: targetPremiumForLeg(leg)
+      }));
+
       const simulationRows = calculation.percentScenarios || [];
       const legColumns = [
         {
@@ -1740,15 +1801,26 @@
               <div className="panel-header" style={{ minHeight: 34 }}>
                 <div className="panel-title">Carga de estrategia</div>
                 <Space size={6}>
+                  <span className="muted">Spot target</span>
+                  <InputNumber
+                    size="small"
+                    value={strategy.targetSpot}
+                    min={0}
+                    step={10}
+                    placeholder={formatNumber(calculation.spot, 0)}
+                    style={{ width: 108 }}
+                    onChange={(targetSpot) => updateMeta({ targetSpot })}
+                  />
                   <Button size="small" onClick={() => copyStrategyBlock('CALL')}>Copiar CALLS</Button>
                   <Button size="small" onClick={() => copyStrategyBlock('PUT')}>Copiar PUTS</Button>
                 </Space>
               </div>
               <SpreadsheetInputGrid
-                rows={legsWithResults}
+                rows={strategyRowsWithTarget}
                 getRowType={(row) => row.type}
                 optionsByType={optionSelectOptionsByType}
-                onUpdate={(rowIndex, patch) => updateLeg(originalIndexById.get(legsWithResults[rowIndex].id), patch)}
+                extraColumns={[{ key: 'targetPremium', title: 'PRIMA TARGET' }]}
+                onUpdate={(rowIndex, patch) => updateLeg(originalIndexById.get(strategyRowsWithTarget[rowIndex].id), patch)}
               />
             </section>
 

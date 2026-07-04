@@ -154,6 +154,7 @@ function normalizeStrategy(input = {}) {
     monthCode: String(input.monthCode || 'AG').toUpperCase(),
     expiration: input.expiration || null,
     spot: input.spot ?? null,
+    targetSpot: input.targetSpot ?? null,
     riskFreeRate: input.riskFreeRate ?? 0.125,
     volatility: input.volatility ?? 0.4,
     useAutoIv: Boolean(input.useAutoIv),
