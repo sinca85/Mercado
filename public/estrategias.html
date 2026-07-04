@@ -517,6 +517,22 @@
       color: #3b6f70 !important;
     }
 
+    .target-price-button {
+      width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      font-weight: inherit;
+      text-align: right;
+    }
+
+    .target-price-button:hover {
+      text-decoration: underline;
+    }
+
     .sheet-table .call-side {
       background: #ffffb3 !important;
       text-align: center !important;
@@ -1695,7 +1711,11 @@
           title: 'Precio',
           dataIndex: 'underlyingPrice',
           width: 105,
-          render: (value) => formatNumber(value, 2)
+          render: (value) => (
+            <button type="button" className="target-price-button" onClick={() => updateMeta({ targetSpot: value })}>
+              {formatNumber(value, 2)}
+            </button>
+          )
         },
         {
           title: 'Rtdo. Finish',
