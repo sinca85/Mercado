@@ -146,7 +146,7 @@ export async function getCachedMarketData({ key, kind, loader, force = false, al
 
   const canRefresh = force || clock.isOpen || !cached || !allowStaleOutsideMarket;
 
-  if (cached && (!stale || !canRefresh)) {
+  if (cached && !force && (!stale || !canRefresh)) {
     return {
       data: cached.data,
       cache: {
