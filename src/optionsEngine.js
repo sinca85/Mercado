@@ -319,9 +319,11 @@ export function calculateStrategy({
     const type = String(leg.type || 'CALL').toUpperCase();
     const contract = type === 'ACC' ? null : findContract(optionsBySymbol, leg);
     const quantity = numberValue(leg.quantity, 0) || 0;
-    const premium = numberValue(leg.premium, 0) || 0;
     const strike = numberValue(leg.strike, contract?.strike, 0) || 0;
     const currentPrice = type === 'ACC' ? (spot || 0) : legCurrentPrice(leg, contract);
+    const premium = leg.source === 'history'
+      ? numberValue(leg.premium, 0) || 0
+      : numberValue(leg.manualPrice, currentPrice, leg.premium, 0) || 0;
     const multiplier = type === 'ACC' ? 1 : MULTIPLIER;
     const gross = quantity * premium * -multiplier;
     const net = type === 'ACC'

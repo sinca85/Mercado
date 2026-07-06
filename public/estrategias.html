@@ -1534,11 +1534,6 @@
         return option.last || option.ask || option.bid || fallback;
       }
 
-      function hasActiveQuantity(leg) {
-        const quantity = parseNumeric(leg?.quantity);
-        return Number.isFinite(quantity) && quantity !== 0;
-      }
-
       function buildRangeLegs(type, selectedRows) {
         const existingBySymbol = new Map(
           fixedLegs
@@ -1554,7 +1549,7 @@
             type,
             quantity: existing?.quantity ?? '',
             symbol: option?.symbol || '',
-            premium: option ? (hasActiveQuantity(existing) ? existing?.premium ?? '' : optionPremium(option, existing?.premium ?? '')) : '',
+            premium: option ? optionPremium(option, existing?.premium ?? '') : '',
             manualPrice: existing?.manualPrice ?? ''
           };
         });
@@ -1627,7 +1622,7 @@
 
       function displayPremiumForLeg(leg) {
         const marketPremium = marketPremiumForLeg(leg);
-        if (!hasActiveQuantity(leg) && marketPremium !== null) return marketPremium;
+        if (marketPremium !== null) return marketPremium;
         return leg.premium;
       }
 
@@ -1690,8 +1685,6 @@
         if (
           Object.prototype.hasOwnProperty.call(patch, 'quantity')
           && !Object.prototype.hasOwnProperty.call(patch, 'premium')
-          && !hasActiveQuantity(currentLeg)
-          && hasActiveQuantity({ quantity: patch.quantity })
           && row?.premium !== ''
           && row?.premium !== undefined
         ) {
