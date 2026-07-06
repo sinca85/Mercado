@@ -1433,7 +1433,7 @@
       };
 
       function copyStrategyBlock(type) {
-        const rows = fixedLegs
+        const rows = strategyRowsWithTarget
           .filter((leg) => leg.type === type)
           .filter((leg) => leg.quantity !== '' || leg.symbol || leg.premium !== '')
           .map((leg) => [leg.quantity || '', leg.symbol || '', leg.premium || ''].join('\t'));
@@ -1534,6 +1534,11 @@
         return option.last || option.ask || option.bid || fallback;
       }
 
+      function hasActiveQuantity(leg) {
+        const quantity = parseNumeric(leg?.quantity);
+        return Number.isFinite(quantity) && quantity !== 0;
+      }
+
       function buildRangeLegs(type, selectedRows) {
         const existingBySymbol = new Map(
           fixedLegs
@@ -1549,7 +1554,7 @@
             type,
             quantity: existing?.quantity ?? '',
             symbol: option?.symbol || '',
-            premium: option ? optionPremium(option, existing?.premium ?? '') : '',
+            premium: option ? (hasActiveQuantity(existing) ? existing?.premium ?? '' : optionPremium(option, existing?.premium ?? '')) : '',
             manualPrice: existing?.manualPrice ?? ''
           };
         });
@@ -1608,19 +1613,29 @@
       }
 
       function currentPremiumForLeg(leg) {
+        return marketPremiumForLeg(leg) ?? parseNumeric(leg.premium);
+      }
+
+      function marketPremiumForLeg(leg) {
         const contract = contractForLeg(leg);
-        return parseNumeric(leg.premium)
-          ?? parseNumeric(leg.result?.currentPrice)
+        return parseNumeric(leg.result?.currentPrice)
           ?? parseNumeric(contract?.mark)
           ?? parseNumeric(contract?.last)
           ?? parseNumeric(contract?.ask)
           ?? parseNumeric(contract?.bid);
       }
 
+      function displayPremiumForLeg(leg) {
+        const marketPremium = marketPremiumForLeg(leg);
+        if (!hasActiveQuantity(leg) && marketPremium !== null) return marketPremium;
+        return leg.premium;
+      }
+
       const strategyRowsWithTarget = legsWithResults.map((leg) => {
         const autoIv = autoIvForLeg(leg);
         return {
           ...leg,
+          premium: displayPremiumForLeg(leg),
           autoIv: autoIv ? formatPercent(autoIv) : '',
           targetPremium: targetPremiumForLeg(leg)
         };
@@ -1664,6 +1679,27 @@
           return highlights;
         }, {});
       })();
+
+      function updateStrategyLegRow(rowIndex, patch) {
+        const row = strategyRowsWithTarget[rowIndex];
+        const originalIndex = originalIndexById.get(row?.id);
+        if (originalIndex === undefined) return;
+
+        const currentLeg = fixedLegs[originalIndex];
+        const nextPatch = { ...patch };
+        if (
+          Object.prototype.hasOwnProperty.call(patch, 'quantity')
+          && !Object.prototype.hasOwnProperty.call(patch, 'premium')
+          && !hasActiveQuantity(currentLeg)
+          && hasActiveQuantity({ quantity: patch.quantity })
+          && row?.premium !== ''
+          && row?.premium !== undefined
+        ) {
+          nextPatch.premium = row.premium;
+        }
+
+        updateLeg(originalIndex, nextPatch);
+      }
 
       function focusNearestStrategyBase(targetPrice) {
         updateMeta({ targetSpot: targetPrice });
@@ -2019,7 +2055,7 @@
                 optionsByType={optionSelectOptionsByType}
                 extraColumnsAfterSymbol={[{ key: 'autoIv', title: 'VI AUTO' }]}
                 extraColumns={[{ key: 'targetPremium', title: 'PRIMA TARGET' }]}
-                onUpdate={(rowIndex, patch) => updateLeg(originalIndexById.get(strategyRowsWithTarget[rowIndex].id), patch)}
+                onUpdate={updateStrategyLegRow}
                 focusRequest={strategyGridFocus}
                 targetHighlights={bestTargetHighlights}
               />
