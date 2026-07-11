@@ -214,6 +214,13 @@
       padding: 10px;
     }
 
+    .history-stack {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      padding: 10px;
+    }
+
     .history-block-title {
       padding: 5px 8px;
       border: 1px solid #111;
@@ -2066,47 +2073,51 @@
             </section>
 
             <section className="panel">
-              <Table
-                className="sheet-table"
-                size="small"
-                rowKey="strike"
-                pagination={false}
-                columns={basesColumns}
-                dataSource={baseRows}
-                scroll={{ x: 732, y: 620 }}
-              />
+              <div className="panel-header">
+                <div className="panel-title">Historial del dia</div>
+                <span className="muted">cantidad/base/prima</span>
+              </div>
+              <div className="history-stack">
+                <div>
+                  <div className="history-block-title">CALLS</div>
+                  <SpreadsheetInputGrid
+                    rows={historyCallsWithResults}
+                    getRowType={() => 'CALL'}
+                    optionsByType={optionSelectOptionsByType}
+                    premiumTitle="PRIMA/PRECIO"
+                    onCellFocus={(rowIndex) => setFocusedHistoryTarget({ type: 'CALL', index: rowIndex })}
+                    onUpdate={(rowIndex, patch) => updateHistoryByType('CALL', rowIndex, patch)}
+                  />
+                </div>
+                <div>
+                  <div className="history-block-title">PUTS</div>
+                  <SpreadsheetInputGrid
+                    rows={historyPutsWithResults}
+                    getRowType={() => 'PUT'}
+                    optionsByType={optionSelectOptionsByType}
+                    premiumTitle="PRIMA/PRECIO"
+                    onCellFocus={(rowIndex) => setFocusedHistoryTarget({ type: 'PUT', index: rowIndex })}
+                    onUpdate={(rowIndex, patch) => updateHistoryByType('PUT', rowIndex, patch)}
+                  />
+                </div>
+              </div>
             </section>
           </div>
 
           <section className="panel" style={{ marginTop: 12 }}>
             <div className="panel-header">
-              <div className="panel-title">Historial del dia</div>
-              <span className="muted">Pega cantidad/base/prima en el bloque de CALLS o PUTS</span>
+              <div className="panel-title">Bases disponibles</div>
+              <span className="muted">{baseRows.length} bases visibles</span>
             </div>
-            <div className="history-grid">
-              <div>
-                <div className="history-block-title">CALLS</div>
-                <SpreadsheetInputGrid
-                  rows={historyCallsWithResults}
-                  getRowType={() => 'CALL'}
-                  optionsByType={optionSelectOptionsByType}
-                  premiumTitle="PRIMA/PRECIO"
-                  onCellFocus={(rowIndex) => setFocusedHistoryTarget({ type: 'CALL', index: rowIndex })}
-                  onUpdate={(rowIndex, patch) => updateHistoryByType('CALL', rowIndex, patch)}
-                />
-              </div>
-              <div>
-                <div className="history-block-title">PUTS</div>
-                <SpreadsheetInputGrid
-                  rows={historyPutsWithResults}
-                  getRowType={() => 'PUT'}
-                  optionsByType={optionSelectOptionsByType}
-                  premiumTitle="PRIMA/PRECIO"
-                  onCellFocus={(rowIndex) => setFocusedHistoryTarget({ type: 'PUT', index: rowIndex })}
-                  onUpdate={(rowIndex, patch) => updateHistoryByType('PUT', rowIndex, patch)}
-                />
-              </div>
-            </div>
+            <Table
+              className="sheet-table"
+              size="small"
+              rowKey="strike"
+              pagination={false}
+              columns={basesColumns}
+              dataSource={baseRows}
+              scroll={{ x: 732, y: 420 }}
+            />
           </section>
 
           <section className="panel" style={{ marginTop: 12 }}>
