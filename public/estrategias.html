@@ -1572,6 +1572,7 @@
             const next = {
               active,
               paused: false,
+              completed: !active,
               spot,
               previousSpot,
               initialSpot: currentPlan.initialSpot,
@@ -1637,7 +1638,7 @@
             paused: false
           };
           simulationPlanRef.current = plan;
-          const next = { active: true, paused: false, spot: prices[0], previousSpot: null, initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
+          const next = { active: true, paused: false, completed: false, spot: prices[0], previousSpot: null, initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
           setSimulation(next);
           emitSimulationStatus(next);
           scheduleSimulation(plan);
@@ -1656,6 +1657,7 @@
             const next = {
               active: true,
               paused: false,
+              completed: false,
               spot: plan.prices[plan.currentStep],
               previousSpot: plan.prices[Math.max(0, plan.currentStep - 1)] || null,
               initialSpot: plan.initialSpot,
@@ -1675,6 +1677,7 @@
           const next = {
             active: false,
             paused: true,
+            completed: false,
             spot: plan.prices[plan.currentStep],
             previousSpot: plan.prices[Math.max(0, plan.currentStep - 1)] || null,
             initialSpot: plan.initialSpot,
@@ -2647,7 +2650,7 @@
       const [strategyName, setStrategyName] = useState('');
       const [simulationMinutes, setSimulationMinutes] = useState(5);
       const [simulationIntervalSeconds, setSimulationIntervalSeconds] = useState(60);
-      const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, step: 0, totalSteps: 0, spot: null, previousSpot: null, initialSpot: null });
+      const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, completed: false, step: 0, totalSteps: 0, spot: null, previousSpot: null, initialSpot: null });
       const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
 
       useEffect(() => {
@@ -2710,6 +2713,7 @@
                 >
                   {simulationStatus.paused ? 'Reanudar' : 'Pausar'}
                 </Button>
+                {simulationStatus.completed ? <Tag color="green">Simulacion completa</Tag> : null}
                 <Button href="/" type="primary">Nueva estrategia</Button>
               </Space>
             </header>
