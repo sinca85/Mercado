@@ -651,7 +651,7 @@
   <script type="text/babel">
     const { useEffect, useMemo, useRef, useState } = React;
     const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Popconfirm, Select, Space, Spin, Switch, Table, Tag, Tooltip, message, theme } = antd;
-    const { PlayCircleOutlined, ReloadOutlined, SaveOutlined, SendOutlined } = icons;
+    const { PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined, SaveOutlined, SendOutlined } = icons;
 
     const UNDERLYINGS = ['GGAL', 'YPFD', 'COME', 'PAMP', 'BMA', 'ALUA', 'SUPV'];
     const DEFAULT_STRATEGY_ROWS_PER_SIDE = 10;
@@ -1463,9 +1463,10 @@
       const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
       const [strategyRange, setStrategyRange] = useState({ from: null, to: null });
       const [strategyGridFocus, setStrategyGridFocus] = useState(null);
-      const [simulation, setSimulation] = useState({ active: false, spot: null, step: 0, totalSteps: 0 });
+      const [simulation, setSimulation] = useState({ active: false, paused: false, spot: null, initialSpot: null, step: 0, totalSteps: 0 });
       const recalcTimerRef = useRef(null);
       const simulationTimerRef = useRef(null);
+      const simulationPlanRef = useRef(null);
 
       async function loadStrategy(strategyId = id, { force = false } = {}) {
         if (!strategyId) return;
@@ -1489,15 +1490,49 @@
       }, []);
 
       useEffect(() => {
+        function emitSimulationStatus(next) {
+          window.dispatchEvent(new CustomEvent('sabro:simulationStatus', { detail: next }));
+        }
+
+        function scheduleSimulation(plan) {
+          if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
+          simulationTimerRef.current = setInterval(() => {
+            if (!simulationPlanRef.current || simulationPlanRef.current.paused) return;
+            const currentPlan = simulationPlanRef.current;
+            currentPlan.currentStep += 1;
+            const step = Math.min(currentPlan.currentStep, currentPlan.totalSteps);
+            const spot = currentPlan.prices[step];
+            const active = step < currentPlan.totalSteps;
+            const next = {
+              active,
+              paused: false,
+              spot,
+              initialSpot: currentPlan.initialSpot,
+              step,
+              totalSteps: currentPlan.totalSteps
+            };
+            setSimulation(next);
+            emitSimulationStatus(next);
+
+            if (!active) {
+              clearInterval(simulationTimerRef.current);
+              simulationTimerRef.current = null;
+              simulationPlanRef.current = null;
+              message.success('Simulacion finalizada.');
+            }
+          }, plan.intervalMs);
+        }
+
         function startSimulation(event) {
           const minutes = Math.max(1, Math.min(120, Number(event.detail?.minutes || 5)));
+          const intervalSeconds = Math.max(1, Math.min(3600, Number(event.detail?.intervalSeconds || 60)));
           const startSpot = Number(payload?.calculation?.spot || payload?.strategy?.targetSpot || 0);
           if (!(startSpot > 0)) {
             message.error('No hay spot base para iniciar la simulacion.');
             return;
           }
           if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
-          const totalSteps = Math.max(1, Math.round(minutes));
+          const totalSteps = Math.max(1, Math.ceil((minutes * 60) / intervalSeconds));
           const finalDrift = (Math.random() * 0.2) - 0.1;
           const prices = [];
           let last = startSpot;
@@ -1513,27 +1548,66 @@
             last = Math.max(startSpot * 0.9, Math.min(startSpot * 1.1, last + meanReversion + noise));
             prices.push(Number(last.toFixed(2)));
           }
-          let currentStep = 0;
-          setSimulation({ active: true, spot: prices[0], step: currentStep, totalSteps });
-          window.dispatchEvent(new CustomEvent('sabro:simulationStatus', { detail: { active: true, step: currentStep, totalSteps, spot: prices[0] } }));
+          const plan = {
+            prices,
+            currentStep: 0,
+            totalSteps,
+            intervalMs: intervalSeconds * 1000,
+            initialSpot: startSpot,
+            paused: false
+          };
+          simulationPlanRef.current = plan;
+          const next = { active: true, paused: false, spot: prices[0], initialSpot: startSpot, step: 0, totalSteps };
+          setSimulation(next);
+          emitSimulationStatus(next);
+          scheduleSimulation(plan);
+          message.success(`Simulacion iniciada por ${minutes} min. Intervalo: ${intervalSeconds}s.`);
+        }
 
-          simulationTimerRef.current = setInterval(() => {
-            currentStep += 1;
-            const nextSpot = prices[Math.min(currentStep, totalSteps)];
-            const active = currentStep < totalSteps;
-            setSimulation({ active, spot: nextSpot, step: currentStep, totalSteps });
-            window.dispatchEvent(new CustomEvent('sabro:simulationStatus', { detail: { active, step: currentStep, totalSteps, spot: nextSpot } }));
-            if (!active && simulationTimerRef.current) {
-              clearInterval(simulationTimerRef.current);
-              simulationTimerRef.current = null;
-              message.success('Simulacion finalizada.');
-            }
-          }, 60000);
-          message.success(`Simulacion iniciada por ${minutes} min.`);
+        function toggleSimulationPause() {
+          const plan = simulationPlanRef.current;
+          if (!plan) {
+            message.info('No hay simulacion activa.');
+            return;
+          }
+
+          if (plan.paused) {
+            plan.paused = false;
+            const next = {
+              active: true,
+              paused: false,
+              spot: plan.prices[plan.currentStep],
+              initialSpot: plan.initialSpot,
+              step: plan.currentStep,
+              totalSteps: plan.totalSteps
+            };
+            setSimulation(next);
+            emitSimulationStatus(next);
+            scheduleSimulation(plan);
+            return;
+          }
+
+          if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
+          simulationTimerRef.current = null;
+          plan.paused = true;
+          const next = {
+            active: false,
+            paused: true,
+            spot: plan.prices[plan.currentStep],
+            initialSpot: plan.initialSpot,
+            step: plan.currentStep,
+            totalSteps: plan.totalSteps
+          };
+          setSimulation(next);
+          emitSimulationStatus(next);
         }
 
         window.addEventListener('sabro:startSimulation', startSimulation);
-        return () => window.removeEventListener('sabro:startSimulation', startSimulation);
+        window.addEventListener('sabro:toggleSimulationPause', toggleSimulationPause);
+        return () => {
+          window.removeEventListener('sabro:startSimulation', startSimulation);
+          window.removeEventListener('sabro:toggleSimulationPause', toggleSimulationPause);
+        };
       }, [payload?.calculation?.spot, payload?.strategy?.targetSpot]);
 
       useEffect(() => {
@@ -2271,6 +2345,9 @@
       const updateMeta = (patch) => {
         applyStrategyChange({ ...strategy, ...patch });
       };
+      const simulationChangePercent = simulation.initialSpot && calculation.spot
+        ? ((Number(calculation.spot) / Number(simulation.initialSpot)) - 1) * 100
+        : null;
 
       return (
         <>
@@ -2296,7 +2373,17 @@
           </div>
 
           <div className="metrics">
-            <div className="metric"><div className="metric-label">Spot estimado</div><div className="metric-value">{formatNumber(calculation.spot, 2)}</div></div>
+            <div className="metric">
+              <div className="metric-label">Spot estimado</div>
+              <div className="metric-value">
+                {formatNumber(calculation.spot, 2)}
+                {simulationChangePercent !== null ? (
+                  <span className={simulationChangePercent >= 0 ? 'positive' : 'negative'} style={{ marginLeft: 8, fontSize: 13 }}>
+                    {simulationChangePercent >= 0 ? '+' : ''}{formatNumber(simulationChangePercent, 2)}%
+                  </span>
+                ) : null}
+              </div>
+            </div>
             <div className="metric"><div className="metric-label">Neto inicial</div><div className="metric-value">{formatMoney(calculation.summary.net)}</div></div>
             <div className="metric"><div className="metric-label">Resultado hoy</div><div className={`metric-value ${calculation.summary.todayResult >= 0 ? 'positive' : 'negative'}`}>{formatMoney(calculation.summary.todayResult)}</div></div>
             <div className="metric"><div className="metric-label">Delta global</div><div className="metric-value">{formatNumber(calculation.summary.delta, 2)}</div></div>
@@ -2442,7 +2529,8 @@
     function App() {
       const [strategyName, setStrategyName] = useState('');
       const [simulationMinutes, setSimulationMinutes] = useState(5);
-      const [simulationStatus, setSimulationStatus] = useState({ active: false, step: 0, totalSteps: 0, spot: null });
+      const [simulationIntervalSeconds, setSimulationIntervalSeconds] = useState(60);
+      const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, step: 0, totalSteps: 0, spot: null, initialSpot: null });
       const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
 
       useEffect(() => {
@@ -2456,7 +2544,13 @@
       }, []);
 
       function startSimulation() {
-        window.dispatchEvent(new CustomEvent('sabro:startSimulation', { detail: { minutes: simulationMinutes } }));
+        window.dispatchEvent(new CustomEvent('sabro:startSimulation', {
+          detail: { minutes: simulationMinutes, intervalSeconds: simulationIntervalSeconds }
+        }));
+      }
+
+      function toggleSimulationPause() {
+        window.dispatchEvent(new CustomEvent('sabro:toggleSimulationPause'));
       }
 
       return (
@@ -2479,8 +2573,25 @@
                   style={{ width: 104 }}
                   onChange={(value) => setSimulationMinutes(value || 1)}
                 />
-                <Button icon={<PlayCircleOutlined />} onClick={startSimulation} loading={simulationStatus.active}>
-                  {simulationStatus.active ? `Sim ${simulationStatus.step}/${simulationStatus.totalSteps}` : 'Iniciar simulacion'}
+                <InputNumber
+                  size="small"
+                  min={1}
+                  max={3600}
+                  step={5}
+                  value={simulationIntervalSeconds}
+                  addonAfter="seg"
+                  style={{ width: 106 }}
+                  onChange={(value) => setSimulationIntervalSeconds(value || 1)}
+                />
+                <Button icon={<PlayCircleOutlined />} onClick={startSimulation} disabled={simulationStatus.active || simulationStatus.paused}>
+                  {simulationStatus.active || simulationStatus.paused ? `Sim ${simulationStatus.step}/${simulationStatus.totalSteps}` : 'Iniciar simulacion'}
+                </Button>
+                <Button
+                  icon={simulationStatus.paused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+                  onClick={toggleSimulationPause}
+                  disabled={!simulationStatus.active && !simulationStatus.paused}
+                >
+                  {simulationStatus.paused ? 'Reanudar' : 'Pausar'}
                 </Button>
                 <Button href="/" type="primary">Nueva estrategia</Button>
               </Space>
