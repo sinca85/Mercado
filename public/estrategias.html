@@ -788,25 +788,36 @@
     function PayoffChart({ scenarios }) {
       const data = scenarios || [];
       if (!data.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Sin escenarios" />;
-      const width = 380;
-      const height = 240;
-      const pad = 24;
+      const width = 560;
+      const height = 260;
+      const pad = 30;
       const minX = Math.min(...data.map((item) => item.underlyingPrice));
       const maxX = Math.max(...data.map((item) => item.underlyingPrice));
-      const minY = Math.min(...data.map((item) => item.finish), 0);
-      const maxY = Math.max(...data.map((item) => item.finish), 0);
+      const yValues = data.flatMap((item) => [item.finish, item.theoretical]).filter((value) => Number.isFinite(Number(value)));
+      const minY = Math.min(...yValues, 0);
+      const maxY = Math.max(...yValues, 0);
       const xScale = (x) => pad + ((x - minX) / Math.max(1, maxX - minX)) * (width - pad * 2);
       const yScale = (y) => height - pad - ((y - minY) / Math.max(1, maxY - minY)) * (height - pad * 2);
-      const points = data.map((item) => `${xScale(item.underlyingPrice)},${yScale(item.finish)}`).join(' ');
+      const pointsFor = (key) => data
+        .filter((item) => Number.isFinite(Number(item[key])))
+        .map((item) => `${xScale(item.underlyingPrice)},${yScale(Number(item[key]))}`)
+        .join(' ');
+      const finishPoints = pointsFor('finish');
+      const theoreticalPoints = pointsFor('theoretical');
       const zeroY = yScale(0);
 
       return (
         <svg className="payoff-chart" viewBox={`0 0 ${width} ${height}`} role="img">
+          <circle cx={width / 2 - 82} cy={20} r="4" fill="#2f93ff" />
+          <text x={width / 2 - 72} y={24} fill="#eef3f8" fontSize="12" fontWeight="700">Rtdo. Finish</text>
+          <circle cx={width / 2 + 18} cy={20} r="4" fill="#ff6b6b" />
+          <text x={width / 2 + 28} y={24} fill="#eef3f8" fontSize="12" fontWeight="700">Rtdo. Teórico</text>
           <line x1={pad} x2={width - pad} y1={zeroY} y2={zeroY} stroke="#526075" strokeWidth="1" />
-          <polyline fill="none" stroke="#2f93ff" strokeWidth="3" points={points} />
+          <polyline fill="none" stroke="#2f93ff" strokeWidth="3" points={finishPoints} />
+          <polyline fill="none" stroke="#ff6b6b" strokeWidth="3" points={theoreticalPoints} />
           <text x={pad} y={height - 7} fill="#98a7b8" fontSize="10">{formatNumber(minX, 0)}</text>
           <text x={width - pad - 38} y={height - 7} fill="#98a7b8" fontSize="10">{formatNumber(maxX, 0)}</text>
-          <text x={pad} y={13} fill="#98a7b8" fontSize="10">{formatMoney(maxY)}</text>
+          <text x={pad} y={24} fill="#98a7b8" fontSize="10">{formatMoney(maxY)}</text>
           <text x={pad} y={height - 28} fill="#98a7b8" fontSize="10">{formatMoney(minY)}</text>
         </svg>
       );
@@ -2098,6 +2109,16 @@
 
           <section className="panel" style={{ marginTop: 12 }}>
             <div className="panel-header">
+              <div className="panel-title">Detalle de cadena IOL</div>
+              <span className="muted">{chainOptions.length} opciones, VI Auto calculada con Black-Scholes</span>
+            </div>
+            <div className="payoff-wrap">
+              <PayoffChart scenarios={calculation.scenarios} />
+            </div>
+          </section>
+
+          <section className="panel" style={{ marginTop: 12 }}>
+            <div className="panel-header">
               <div className="panel-title">Bases disponibles</div>
               <span className="muted">{baseRows.length} bases visibles</span>
             </div>
@@ -2110,16 +2131,6 @@
               dataSource={baseRows}
               scroll={{ x: 732, y: 420 }}
             />
-          </section>
-
-          <section className="panel" style={{ marginTop: 12 }}>
-            <div className="panel-header">
-              <div className="panel-title">Detalle de cadena IOL</div>
-              <span className="muted">{chainOptions.length} opciones, VI Auto calculada con Black-Scholes</span>
-            </div>
-            <div className="payoff-wrap">
-              <PayoffChart scenarios={calculation.scenarios} />
-            </div>
           </section>
         </>
       );
