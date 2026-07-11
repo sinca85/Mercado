@@ -723,6 +723,32 @@
         : spot * normalCdf(d1) - strike * discount * normalCdf(d2);
     }
 
+    function impliedVolatilityFromPrice({ price, type, spot, strike, years, rate }) {
+      if (!(price > 0) || !(spot > 0) || !(strike > 0) || !(years > 0)) return null;
+      const intrinsic = type === 'PUT' ? Math.max(strike - spot, 0) : Math.max(spot - strike, 0);
+      if (price <= intrinsic + 0.001) return 0.0001;
+      let low = 0.0001;
+      let high = 5;
+      for (let index = 0; index < 70; index += 1) {
+        const mid = (low + high) / 2;
+        const candidate = blackScholesPrice({ type, spot, strike, years, volatility: mid, rate });
+        if (Math.abs(candidate - price) < 0.001) return mid;
+        if (candidate > price) high = mid;
+        else low = mid;
+      }
+      return (low + high) / 2;
+    }
+
+    function stableNoise(seed) {
+      let hash = 2166136261;
+      const value = String(seed || '');
+      for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return ((hash >>> 0) / 4294967295) - 0.5;
+    }
+
     function optionPayoff(type, spot, strike) {
       return type === 'PUT' ? Math.max(strike - spot, 0) : Math.max(spot - strike, 0);
     }
@@ -752,9 +778,31 @@
     function simulateOptionChain(options, spot, strategy, simulatedNow = Date.now()) {
       if (!(spot > 0)) return options;
       return options.map((option) => {
-        const price = theoreticalOptionPrice(option, spot, strategy, simulatedNow);
-        if (!Number.isFinite(price)) return option;
-        return { ...option, mark: price, last: price, bid: Math.max(0, price * 0.995), ask: price * 1.005 };
+        const theoreticalPrice = theoreticalOptionPrice(option, spot, strategy, simulatedNow);
+        if (!Number.isFinite(theoreticalPrice)) return option;
+        const years = yearsToExpiration(option.expiration || strategy.expiration, simulatedNow);
+        const strike = Number(option.strike);
+        const moneyness = strike > 0 ? Math.abs(spot / strike - 1) : 0;
+        const liquiditySpread = Math.min(0.18, 0.015 + moneyness * 0.35);
+        const tickKey = Math.floor(Number(simulatedNow) / 3600000);
+        const noise = stableNoise(`${option.symbol}-${tickKey}-${Math.round(spot / 10)}`) * liquiditySpread;
+        const price = Math.max(0.001, theoreticalPrice * (1 + noise));
+        const impliedVolatility = impliedVolatilityFromPrice({
+          price,
+          type: option.optionType,
+          spot,
+          strike,
+          years,
+          rate: Number(strategy.riskFreeRate || 0.125)
+        }) ?? option.impliedVolatility;
+        return {
+          ...option,
+          mark: price,
+          last: price,
+          bid: Math.max(0, price * (1 - liquiditySpread / 2)),
+          ask: price * (1 + liquiditySpread / 2),
+          impliedVolatility
+        };
       });
     }
 
@@ -1479,7 +1527,7 @@
       const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
       const [strategyRange, setStrategyRange] = useState({ from: null, to: null });
       const [strategyGridFocus, setStrategyGridFocus] = useState(null);
-      const [simulation, setSimulation] = useState({ active: false, paused: false, spot: null, initialSpot: null, simulatedNow: null, step: 0, totalSteps: 0 });
+      const [simulation, setSimulation] = useState({ active: false, paused: false, spot: null, previousSpot: null, initialSpot: null, simulatedNow: null, step: 0, totalSteps: 0 });
       const recalcTimerRef = useRef(null);
       const simulationTimerRef = useRef(null);
       const simulationPlanRef = useRef(null);
@@ -1518,12 +1566,14 @@
             currentPlan.currentStep += 1;
             const step = Math.min(currentPlan.currentStep, currentPlan.totalSteps);
             const spot = currentPlan.prices[step];
+            const previousSpot = currentPlan.prices[Math.max(0, step - 1)];
             const simulatedNow = currentPlan.simulatedDates[step];
             const active = step < currentPlan.totalSteps;
             const next = {
               active,
               paused: false,
               spot,
+              previousSpot,
               initialSpot: currentPlan.initialSpot,
               simulatedNow,
               step,
@@ -1584,7 +1634,7 @@
             paused: false
           };
           simulationPlanRef.current = plan;
-          const next = { active: true, paused: false, spot: prices[0], initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
+          const next = { active: true, paused: false, spot: prices[0], previousSpot: null, initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
           setSimulation(next);
           emitSimulationStatus(next);
           scheduleSimulation(plan);
@@ -1604,6 +1654,7 @@
               active: true,
               paused: false,
               spot: plan.prices[plan.currentStep],
+              previousSpot: plan.prices[Math.max(0, plan.currentStep - 1)] || null,
               initialSpot: plan.initialSpot,
               simulatedNow: plan.simulatedDates[plan.currentStep],
               step: plan.currentStep,
@@ -1622,6 +1673,7 @@
             active: false,
             paused: true,
             spot: plan.prices[plan.currentStep],
+            previousSpot: plan.prices[Math.max(0, plan.currentStep - 1)] || null,
             initialSpot: plan.initialSpot,
             simulatedNow: plan.simulatedDates[plan.currentStep],
             step: plan.currentStep,
@@ -2391,8 +2443,8 @@
       const updateMeta = (patch) => {
         applyStrategyChange({ ...strategy, ...patch });
       };
-      const simulationChangePercent = simulation.initialSpot && calculation.spot
-        ? ((Number(calculation.spot) / Number(simulation.initialSpot)) - 1) * 100
+      const simulationChangePercent = simulation.previousSpot && calculation.spot
+        ? ((Number(calculation.spot) / Number(simulation.previousSpot)) - 1) * 100
         : null;
       const simulationDateLabel = simulation.simulatedNow
         ? dayjs(simulation.simulatedNow).format('DD/MM/YYYY')
@@ -2432,6 +2484,7 @@
                   </span>
                 ) : null}
               </div>
+              {simulationChangePercent !== null ? <div className="metric-label">vs. actualizacion anterior</div> : null}
               {simulationDateLabel ? <div className="metric-label">Fecha simulada {simulationDateLabel}</div> : null}
             </div>
             <div className="metric"><div className="metric-label">Neto inicial</div><div className="metric-value">{formatMoney(calculation.summary.net)}</div></div>
@@ -2591,7 +2644,7 @@
       const [strategyName, setStrategyName] = useState('');
       const [simulationMinutes, setSimulationMinutes] = useState(5);
       const [simulationIntervalSeconds, setSimulationIntervalSeconds] = useState(60);
-      const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, step: 0, totalSteps: 0, spot: null, initialSpot: null });
+      const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, step: 0, totalSteps: 0, spot: null, previousSpot: null, initialSpot: null });
       const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
 
       useEffect(() => {
