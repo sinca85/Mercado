@@ -120,7 +120,8 @@ function normalizeHistory(inputHistory) {
       quantity: item.quantity ?? '',
       symbol: String(item.symbol || item.base || '').toUpperCase(),
       premium: item.premium ?? '',
-      manualPrice: item.manualPrice ?? ''
+      manualPrice: item.manualPrice ?? '',
+      realized: item.realized ?? 0
     };
   });
   const puts = Array.from({ length: Math.max(HISTORY_ROWS_PER_SIDE, byType.PUT.length) }, (_item, index) => {
@@ -132,7 +133,8 @@ function normalizeHistory(inputHistory) {
       quantity: item.quantity ?? '',
       symbol: String(item.symbol || item.base || '').toUpperCase(),
       premium: item.premium ?? '',
-      manualPrice: item.manualPrice ?? ''
+      manualPrice: item.manualPrice ?? '',
+      realized: item.realized ?? 0
     };
   });
   const acc = byType.ACC.map((item, index) => ({
@@ -142,7 +144,8 @@ function normalizeHistory(inputHistory) {
     quantity: item.quantity ?? '',
     symbol: String(item.symbol || item.base || '').toUpperCase(),
     premium: item.premium ?? '',
-    manualPrice: item.manualPrice ?? ''
+    manualPrice: item.manualPrice ?? '',
+    realized: item.realized ?? 0
   }));
   return [...calls, ...puts, ...acc];
 }

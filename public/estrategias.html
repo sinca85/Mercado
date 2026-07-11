@@ -651,12 +651,14 @@
   <script type="text/babel">
     const { useEffect, useMemo, useRef, useState } = React;
     const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Popconfirm, Select, Space, Spin, Switch, Table, Tag, Tooltip, message, theme } = antd;
-    const { ReloadOutlined, SaveOutlined } = icons;
+    const { PlayCircleOutlined, ReloadOutlined, SaveOutlined, SendOutlined } = icons;
 
     const UNDERLYINGS = ['GGAL', 'YPFD', 'COME', 'PAMP', 'BMA', 'ALUA', 'SUPV'];
     const DEFAULT_STRATEGY_ROWS_PER_SIDE = 10;
     const HISTORY_ROWS_PER_SIDE = 24;
     const BEST_TARGET_TOLERANCE = 0.05;
+    const OPTION_MULTIPLIER = 100;
+    const OPTION_FEE_FACTOR = (0.005 + 0.002) * 1.21;
     const MONTHS = [
       { value: 'AG', label: 'Agosto' },
       { value: 'OC', label: 'Octubre' },
@@ -721,6 +723,147 @@
         : spot * normalCdf(d1) - strike * discount * normalCdf(d2);
     }
 
+    function optionPayoff(type, spot, strike) {
+      return type === 'PUT' ? Math.max(strike - spot, 0) : Math.max(spot - strike, 0);
+    }
+
+    function optionMark(option) {
+      return parseNumeric(option?.mark)
+        ?? parseNumeric(option?.last)
+        ?? parseNumeric(option?.ask)
+        ?? parseNumeric(option?.bid)
+        ?? 0;
+    }
+
+    function theoreticalOptionPrice(option, spot, strategy) {
+      const volatility = Number(option?.impliedVolatility) > 0 && strategy.useAutoIv
+        ? Number(option.impliedVolatility)
+        : Number(strategy.volatility || 0.4);
+      return blackScholesPrice({
+        type: option.optionType,
+        spot,
+        strike: Number(option.strike),
+        years: yearsToExpiration(option.expiration || strategy.expiration),
+        volatility,
+        rate: Number(strategy.riskFreeRate || 0.125)
+      });
+    }
+
+    function simulateOptionChain(options, spot, strategy) {
+      if (!(spot > 0)) return options;
+      return options.map((option) => {
+        const price = theoreticalOptionPrice(option, spot, strategy);
+        if (!Number.isFinite(price)) return option;
+        return { ...option, mark: price, last: price, bid: Math.max(0, price * 0.995), ask: price * 1.005 };
+      });
+    }
+
+    function calculateLocalStrategySnapshot({ strategy, options, spot }) {
+      const optionsBySymbol = new Map(options.map((option) => [String(option.symbol || '').toUpperCase(), option]));
+      const legsInput = [
+        ...(strategy.legs || []),
+        ...(strategy.history || []).map((leg) => ({ ...leg, source: 'history' }))
+      ].filter((leg) => {
+        const quantity = parseNumeric(leg.quantity);
+        return quantity !== null && (leg.type === 'ACC' || String(leg.symbol || '').trim());
+      });
+
+      const legs = legsInput.map((leg, index) => {
+        const type = String(leg.type || 'CALL').toUpperCase();
+        const symbol = String(leg.symbol || '').toUpperCase();
+        const contract = optionsBySymbol.get(symbol);
+        const quantity = parseNumeric(leg.quantity) ?? 0;
+        const strike = parseNumeric(leg.strike) ?? parseNumeric(contract?.strike) ?? 0;
+        const currentPrice = type === 'ACC' ? spot : optionMark(contract);
+        const premium = leg.source === 'history'
+          ? parseNumeric(leg.premium) ?? 0
+          : parseNumeric(leg.manualPrice) ?? currentPrice ?? parseNumeric(leg.premium) ?? 0;
+        const realized = parseNumeric(leg.realized) ?? 0;
+        const multiplier = type === 'ACC' ? 1 : OPTION_MULTIPLIER;
+        const gross = quantity * premium * -multiplier;
+        const netBeforeRealized = type === 'ACC'
+          ? gross
+          : quantity > 0
+          ? quantity * premium * (1 + OPTION_FEE_FACTOR) * -OPTION_MULTIPLIER
+          : quantity * premium * (1 - OPTION_FEE_FACTOR) * -OPTION_MULTIPLIER;
+        const net = netBeforeRealized + realized;
+        const currentValue = currentPrice * quantity * -multiplier;
+        const years = yearsToExpiration(contract?.expiration || strategy.expiration);
+        const impliedVolatility = parseNumeric(contract?.impliedVolatility);
+        const volatility = strategy.useAutoIv && impliedVolatility
+          ? impliedVolatility
+          : Number(strategy.volatility || 0.4);
+        const theoreticalPrice = type === 'ACC'
+          ? spot
+          : blackScholesPrice({ type, spot, strike, years, volatility, rate: Number(strategy.riskFreeRate || 0.125) });
+        return {
+          id: leg.id || `leg-${index + 1}`,
+          type,
+          quantity,
+          source: leg.source || 'strategy',
+          symbol,
+          strike,
+          premium,
+          currentPrice,
+          gross,
+          net,
+          currentValue,
+          todayResult: net - currentValue,
+          contract,
+          theoreticalPrice,
+          impliedVolatility,
+          greeks: { delta: 0, gamma: 0, vega: 0, theta: 0 }
+        };
+      });
+
+      function finishAt(price) {
+        return legs.reduce((sum, leg) => {
+          if (leg.type === 'ACC') return sum + leg.net + price * leg.quantity;
+          return sum + leg.net + optionPayoff(leg.type, price, leg.strike) * leg.quantity * OPTION_MULTIPLIER;
+        }, 0);
+      }
+
+      function theoreticalAt(price) {
+        return legs.reduce((sum, leg) => {
+          if (leg.type === 'ACC') return sum + leg.net + price * leg.quantity;
+          const volatility = strategy.useAutoIv && leg.impliedVolatility ? leg.impliedVolatility : Number(strategy.volatility || 0.4);
+          const priceAtScenario = blackScholesPrice({
+            type: leg.type,
+            spot: price,
+            strike: leg.strike,
+            years: yearsToExpiration(leg.contract?.expiration || strategy.expiration),
+            volatility,
+            rate: Number(strategy.riskFreeRate || 0.125)
+          });
+          return sum + leg.net + priceAtScenario * leg.quantity * OPTION_MULTIPLIER;
+        }, 0);
+      }
+
+      const strikes = options.map((option) => Number(option.strike)).filter((value) => value > 0);
+      const minStrike = Math.min(...strikes, spot);
+      const maxStrike = Math.max(...strikes, spot);
+      const minScenario = Math.max(0, Math.floor((minStrike * 0.8) / 100) * 100);
+      const maxScenario = Math.ceil((maxStrike * 1.2) / 100) * 100;
+      const step = Math.max(10, Math.round(((maxScenario - minScenario) / 40) / 10) * 10);
+      const scenarios = [];
+      for (let price = minScenario; price <= maxScenario; price += step) {
+        scenarios.push({ underlyingPrice: price, finish: finishAt(price), theoretical: theoreticalAt(price) });
+      }
+      const percentScenarios = [];
+      for (let percent = -30; percent <= 30; percent += 2) {
+        const underlyingPrice = spot * (1 + percent / 100);
+        percentScenarios.push({ percent, underlyingPrice, finish: finishAt(underlyingPrice), theoretical: theoreticalAt(underlyingPrice) });
+      }
+      const summary = legs.reduce((acc, leg) => {
+        acc.gross += leg.gross;
+        acc.net += leg.net;
+        acc.currentValue += leg.currentValue;
+        acc.todayResult += leg.todayResult;
+        return acc;
+      }, { gross: 0, net: 0, currentValue: 0, todayResult: 0, delta: 0, gamma: 0, vega: 0, theta: 0 });
+      return { spot, multiplier: OPTION_MULTIPLIER, assumptions: {}, legs, summary, scenarios, percentScenarios };
+    }
+
     function yearsToExpiration(expiration) {
       if (!expiration) return 50 / 365;
       const expiry = new Date(`${expiration}T21:00:00.000Z`);
@@ -779,7 +922,8 @@
           quantity: row.quantity ?? '',
           symbol: row.symbol || '',
           premium: row.premium ?? '',
-          manualPrice: row.manualPrice ?? ''
+          manualPrice: row.manualPrice ?? '',
+          realized: row.realized ?? 0
         };
       });
       return [...makeRows('CALL', calls), ...makeRows('PUT', puts)];
@@ -1010,6 +1154,18 @@
         onUpdate(rowIndex, patch);
       }
 
+      function renderCellContent(row, rowIndex, column, colIndex, highlight) {
+        if (column.render) return column.render(row[column.key], row, rowIndex, colIndex);
+        if (highlight) {
+          return (
+            <Tooltip title={highlight.title} mouseEnterDelay={0} mouseLeaveDelay={0}>
+              <span>{row[column.key] ?? ''}</span>
+            </Tooltip>
+          );
+        }
+        return <span>{row[column.key] ?? ''}</span>;
+      }
+
       function pickSymbol(rowIndex, symbol) {
         changeCell(rowIndex, 'symbol', symbol);
         stopEdit();
@@ -1154,12 +1310,8 @@
                                 </div>
                               ) : null}
                             </>
-                          ) : highlight ? (
-                            <Tooltip title={highlight.title} mouseEnterDelay={0} mouseLeaveDelay={0}>
-                              <span>{row[column.key] ?? ''}</span>
-                            </Tooltip>
                           ) : (
-                            <span>{row[column.key] ?? ''}</span>
+                            renderCellContent(row, rowIndex, column, colIndex, highlight)
                           )}
                         </td>
                       );
@@ -1311,7 +1463,9 @@
       const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
       const [strategyRange, setStrategyRange] = useState({ from: null, to: null });
       const [strategyGridFocus, setStrategyGridFocus] = useState(null);
+      const [simulation, setSimulation] = useState({ active: false, spot: null, step: 0, totalSteps: 0 });
       const recalcTimerRef = useRef(null);
+      const simulationTimerRef = useRef(null);
 
       async function loadStrategy(strategyId = id, { force = false } = {}) {
         if (!strategyId) return;
@@ -1331,7 +1485,56 @@
 
       useEffect(() => () => {
         if (recalcTimerRef.current) clearTimeout(recalcTimerRef.current);
+        if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
       }, []);
+
+      useEffect(() => {
+        function startSimulation(event) {
+          const minutes = Math.max(1, Math.min(120, Number(event.detail?.minutes || 5)));
+          const startSpot = Number(payload?.calculation?.spot || payload?.strategy?.targetSpot || 0);
+          if (!(startSpot > 0)) {
+            message.error('No hay spot base para iniciar la simulacion.');
+            return;
+          }
+          if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
+          const totalSteps = Math.max(1, Math.round(minutes));
+          const finalDrift = (Math.random() * 0.2) - 0.1;
+          const prices = [];
+          let last = startSpot;
+          for (let step = 0; step <= totalSteps; step += 1) {
+            if (step === 0) {
+              prices.push(Number(startSpot.toFixed(2)));
+              continue;
+            }
+            const progress = step / totalSteps;
+            const target = startSpot * (1 + finalDrift * progress);
+            const noise = startSpot * ((Math.random() - 0.5) * 0.018);
+            const meanReversion = (target - last) * 0.45;
+            last = Math.max(startSpot * 0.9, Math.min(startSpot * 1.1, last + meanReversion + noise));
+            prices.push(Number(last.toFixed(2)));
+          }
+          let currentStep = 0;
+          setSimulation({ active: true, spot: prices[0], step: currentStep, totalSteps });
+          window.dispatchEvent(new CustomEvent('sabro:simulationStatus', { detail: { active: true, step: currentStep, totalSteps, spot: prices[0] } }));
+
+          simulationTimerRef.current = setInterval(() => {
+            currentStep += 1;
+            const nextSpot = prices[Math.min(currentStep, totalSteps)];
+            const active = currentStep < totalSteps;
+            setSimulation({ active, spot: nextSpot, step: currentStep, totalSteps });
+            window.dispatchEvent(new CustomEvent('sabro:simulationStatus', { detail: { active, step: currentStep, totalSteps, spot: nextSpot } }));
+            if (!active && simulationTimerRef.current) {
+              clearInterval(simulationTimerRef.current);
+              simulationTimerRef.current = null;
+              message.success('Simulacion finalizada.');
+            }
+          }, 60000);
+          message.success(`Simulacion iniciada por ${minutes} min.`);
+        }
+
+        window.addEventListener('sabro:startSimulation', startSimulation);
+        return () => window.removeEventListener('sabro:startSimulation', startSimulation);
+      }, [payload?.calculation?.spot, payload?.strategy?.targetSpot]);
 
       useEffect(() => {
         onStrategyNameChange?.(payload?.strategy?.name || '');
@@ -1392,10 +1595,20 @@
       if (loading || !payload) return <Spin tip="Cargando estrategia..." fullscreen />;
 
       const strategy = payload.strategy;
-      const calculation = payload.calculation;
-      const chainOptions = payload.chain.options || [];
+      const rawChainOptions = payload.chain.options || [];
       const fixedLegs = makeFixedLegs(strategy.legs);
       const fixedHistory = makeFixedHistory(strategy.history);
+      const simulationSpot = simulation.spot || null;
+      const chainOptions = simulationSpot
+        ? simulateOptionChain(rawChainOptions, simulationSpot, strategy)
+        : rawChainOptions;
+      const calculation = simulationSpot
+        ? calculateLocalStrategySnapshot({
+            strategy: { ...strategy, legs: fixedLegs, history: fixedHistory },
+            options: chainOptions,
+            spot: simulationSpot
+          })
+        : payload.calculation;
       if (strategy.legs.length !== fixedLegs.length || strategy.legs.some((leg, index) => leg.id !== fixedLegs[index].id || leg.type !== fixedLegs[index].type)) {
         strategy.legs = fixedLegs;
       }
@@ -1442,6 +1655,81 @@
         strategy.history = history;
         applyStrategyChange({ ...strategy, history });
       };
+
+      function mergeHistoryTrade(existingRow, trade) {
+        const existingQuantity = parseNumeric(existingRow.quantity) ?? 0;
+        const existingPremium = parseNumeric(existingRow.premium) ?? 0;
+        const existingRealized = parseNumeric(existingRow.realized) ?? 0;
+        const tradeQuantity = parseNumeric(trade.quantity) ?? 0;
+        const tradePremium = parseNumeric(trade.premium) ?? 0;
+        const nextQuantity = existingQuantity + tradeQuantity;
+        let nextPremium = existingPremium || tradePremium;
+        let nextRealized = existingRealized;
+
+        if (existingQuantity === 0 || Math.sign(existingQuantity) === Math.sign(tradeQuantity)) {
+          const totalAbs = Math.abs(existingQuantity) + Math.abs(tradeQuantity);
+          nextPremium = totalAbs > 0
+            ? ((Math.abs(existingQuantity) * existingPremium) + (Math.abs(tradeQuantity) * tradePremium)) / totalAbs
+            : tradePremium;
+        } else {
+          const closedQuantity = Math.min(Math.abs(existingQuantity), Math.abs(tradeQuantity));
+          const realizedPerOption = existingQuantity > 0
+            ? tradePremium - existingPremium
+            : existingPremium - tradePremium;
+          nextRealized += realizedPerOption * closedQuantity * OPTION_MULTIPLIER;
+          if (nextQuantity === 0) nextPremium = tradePremium;
+          else if (Math.sign(nextQuantity) !== Math.sign(existingQuantity)) nextPremium = tradePremium;
+        }
+
+        return {
+          ...existingRow,
+          type: trade.type,
+          quantity: nextQuantity === 0 ? 0 : Number(nextQuantity.toFixed(6)),
+          symbol: trade.symbol,
+          premium: Number(nextPremium.toFixed(3)),
+          realized: Number(nextRealized.toFixed(2))
+        };
+      }
+
+      function transferLegToHistory(rowIndex) {
+        const row = strategyRowsWithTarget[rowIndex];
+        const originalIndex = originalIndexById.get(row?.id);
+        const quantity = parseNumeric(row?.quantity);
+        const symbol = String(row?.symbol || '').toUpperCase();
+        const premium = currentPremiumForLeg(row);
+        if (!(quantity !== null && quantity !== 0) || !symbol || !(premium > 0)) {
+          message.info('Completá cantidad, base y prima para pasar al historial.');
+          return;
+        }
+
+        const history = makeFixedHistory(strategy.history);
+        const calls = history.filter((item) => item.type === 'CALL');
+        const puts = history.filter((item) => item.type === 'PUT');
+        const targetRows = row.type === 'CALL' ? calls : puts;
+        const trade = { type: row.type, quantity, symbol, premium };
+        let targetIndex = targetRows.findIndex((item) => String(item.symbol || '').toUpperCase() === symbol);
+        if (targetIndex === -1) targetIndex = targetRows.findIndex((item) => !item.symbol && (item.quantity === '' || item.quantity === 0) && (item.premium === '' || item.premium === 0));
+        if (targetIndex === -1) {
+          targetRows.push({
+            id: `history-${row.type.toLowerCase()}-${targetRows.length + 1}`,
+            type: row.type,
+            quantity: '',
+            symbol: '',
+            premium: '',
+            manualPrice: '',
+            realized: 0
+          });
+          targetIndex = targetRows.length - 1;
+        }
+
+        targetRows[targetIndex] = mergeHistoryTrade(targetRows[targetIndex], trade);
+        const legs = strategy.legs.map((leg, index) => index === originalIndex ? { ...leg, quantity: '', manualPrice: '' } : leg);
+        const nextStrategy = { ...strategy, legs, history: [...calls, ...puts] };
+        strategy.legs = legs;
+        strategy.history = nextStrategy.history;
+        applyStrategyChange(nextStrategy);
+        message.success(`${symbol} enviado al historial.`);
+      }
 
       function copyStrategyBlock(type) {
         const rows = strategyRowsWithTarget
@@ -2067,7 +2355,22 @@
                 getRowType={(row) => row.type}
                 optionsByType={optionSelectOptionsByType}
                 extraColumnsAfterSymbol={[{ key: 'autoIv', title: 'VI AUTO' }]}
-                extraColumns={[{ key: 'targetPremium', title: 'PRIMA TARGET' }]}
+                extraColumns={[
+                  { key: 'targetPremium', title: 'PRIMA TARGET' },
+                  {
+                    key: 'actions',
+                    title: 'ACCIONES',
+                    render: (_value, row, rowIndex) => (
+                      <Button
+                        size="small"
+                        icon={<SendOutlined />}
+                        title="Enviar al historial"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={() => transferLegToHistory(rowIndex)}
+                      />
+                    )
+                  }
+                ]}
                 onUpdate={updateStrategyLegRow}
                 focusRequest={strategyGridFocus}
                 targetHighlights={bestTargetHighlights}
@@ -2138,11 +2441,23 @@
 
     function App() {
       const [strategyName, setStrategyName] = useState('');
+      const [simulationMinutes, setSimulationMinutes] = useState(5);
+      const [simulationStatus, setSimulationStatus] = useState({ active: false, step: 0, totalSteps: 0, spot: null });
       const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
 
       useEffect(() => {
         document.title = pageTitle;
       }, [pageTitle]);
+
+      useEffect(() => {
+        const updateStatus = (event) => setSimulationStatus(event.detail || { active: false, step: 0, totalSteps: 0, spot: null });
+        window.addEventListener('sabro:simulationStatus', updateStatus);
+        return () => window.removeEventListener('sabro:simulationStatus', updateStatus);
+      }, []);
+
+      function startSimulation() {
+        window.dispatchEvent(new CustomEvent('sabro:startSimulation', { detail: { minutes: simulationMinutes } }));
+      }
 
       return (
         <ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: { colorPrimary: '#2f93ff', borderRadius: 6 } }}>
@@ -2154,6 +2469,19 @@
               </div>
               <Space>
                 <Button href="/cotizaciones">Cotizaciones</Button>
+                <InputNumber
+                  size="small"
+                  min={1}
+                  max={120}
+                  step={1}
+                  value={simulationMinutes}
+                  addonAfter="min"
+                  style={{ width: 104 }}
+                  onChange={(value) => setSimulationMinutes(value || 1)}
+                />
+                <Button icon={<PlayCircleOutlined />} onClick={startSimulation} loading={simulationStatus.active}>
+                  {simulationStatus.active ? `Sim ${simulationStatus.step}/${simulationStatus.totalSteps}` : 'Iniciar simulacion'}
+                </Button>
                 <Button href="/" type="primary">Nueva estrategia</Button>
               </Space>
             </header>

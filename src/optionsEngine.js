@@ -324,13 +324,15 @@ export function calculateStrategy({
     const premium = leg.source === 'history'
       ? numberValue(leg.premium, 0) || 0
       : numberValue(leg.manualPrice, currentPrice, leg.premium, 0) || 0;
+    const realized = numberValue(leg.realized, 0) || 0;
     const multiplier = type === 'ACC' ? 1 : MULTIPLIER;
     const gross = quantity * premium * -multiplier;
-    const net = type === 'ACC'
+    const netBeforeRealized = type === 'ACC'
       ? quantity * premium * -multiplier
       : quantity > 0
       ? quantity * premium * (1 + feeFactor) * -MULTIPLIER
       : quantity * premium * (1 - feeFactor) * -MULTIPLIER;
+    const net = netBeforeRealized + realized;
     const currentValue = currentPrice * quantity * -multiplier;
     const todayResult = net - currentValue;
     const years = getYearsToExpiration(contract?.expiration || strategy.expiration);
