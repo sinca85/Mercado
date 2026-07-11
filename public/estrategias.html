@@ -735,7 +735,7 @@
         ?? 0;
     }
 
-    function theoreticalOptionPrice(option, spot, strategy) {
+    function theoreticalOptionPrice(option, spot, strategy, simulatedNow = Date.now()) {
       const volatility = Number(option?.impliedVolatility) > 0 && strategy.useAutoIv
         ? Number(option.impliedVolatility)
         : Number(strategy.volatility || 0.4);
@@ -743,22 +743,22 @@
         type: option.optionType,
         spot,
         strike: Number(option.strike),
-        years: yearsToExpiration(option.expiration || strategy.expiration),
+        years: yearsToExpiration(option.expiration || strategy.expiration, simulatedNow),
         volatility,
         rate: Number(strategy.riskFreeRate || 0.125)
       });
     }
 
-    function simulateOptionChain(options, spot, strategy) {
+    function simulateOptionChain(options, spot, strategy, simulatedNow = Date.now()) {
       if (!(spot > 0)) return options;
       return options.map((option) => {
-        const price = theoreticalOptionPrice(option, spot, strategy);
+        const price = theoreticalOptionPrice(option, spot, strategy, simulatedNow);
         if (!Number.isFinite(price)) return option;
         return { ...option, mark: price, last: price, bid: Math.max(0, price * 0.995), ask: price * 1.005 };
       });
     }
 
-    function calculateLocalStrategySnapshot({ strategy, options, spot }) {
+    function calculateLocalStrategySnapshot({ strategy, options, spot, simulatedNow = Date.now() }) {
       const optionsBySymbol = new Map(options.map((option) => [String(option.symbol || '').toUpperCase(), option]));
       const legsInput = [
         ...(strategy.legs || []),
@@ -788,7 +788,7 @@
           : quantity * premium * (1 - OPTION_FEE_FACTOR) * -OPTION_MULTIPLIER;
         const net = netBeforeRealized + realized;
         const currentValue = currentPrice * quantity * -multiplier;
-        const years = yearsToExpiration(contract?.expiration || strategy.expiration);
+        const years = yearsToExpiration(contract?.expiration || strategy.expiration, simulatedNow);
         const impliedVolatility = parseNumeric(contract?.impliedVolatility);
         const volatility = strategy.useAutoIv && impliedVolatility
           ? impliedVolatility
@@ -831,7 +831,7 @@
             type: leg.type,
             spot: price,
             strike: leg.strike,
-            years: yearsToExpiration(leg.contract?.expiration || strategy.expiration),
+            years: yearsToExpiration(leg.contract?.expiration || strategy.expiration, simulatedNow),
             volatility,
             rate: Number(strategy.riskFreeRate || 0.125)
           });
@@ -864,10 +864,26 @@
       return { spot, multiplier: OPTION_MULTIPLIER, assumptions: {}, legs, summary, scenarios, percentScenarios };
     }
 
-    function yearsToExpiration(expiration) {
+    function yearsToExpiration(expiration, fromDate = Date.now()) {
       if (!expiration) return 50 / 365;
       const expiry = new Date(`${expiration}T21:00:00.000Z`);
-      return Math.max(1, Math.ceil((expiry.getTime() - Date.now()) / 86400000)) / 365;
+      const fromTime = fromDate instanceof Date ? fromDate.getTime() : Number(fromDate);
+      return Math.max(1, Math.ceil((expiry.getTime() - fromTime) / 86400000)) / 365;
+    }
+
+    function expirationTime(value) {
+      if (!value) return null;
+      const time = new Date(`${value}T21:00:00.000Z`).getTime();
+      return Number.isFinite(time) ? time : null;
+    }
+
+    function nearestExpirationTime(options, fallbackExpiration) {
+      const now = Date.now();
+      const expirations = [
+        ...options.map((option) => expirationTime(option.expiration)),
+        expirationTime(fallbackExpiration)
+      ].filter((time) => Number.isFinite(time) && time > now);
+      return expirations.length ? Math.min(...expirations) : null;
     }
 
     function getStrategyIdFromPath() {
@@ -1463,7 +1479,7 @@
       const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
       const [strategyRange, setStrategyRange] = useState({ from: null, to: null });
       const [strategyGridFocus, setStrategyGridFocus] = useState(null);
-      const [simulation, setSimulation] = useState({ active: false, paused: false, spot: null, initialSpot: null, step: 0, totalSteps: 0 });
+      const [simulation, setSimulation] = useState({ active: false, paused: false, spot: null, initialSpot: null, simulatedNow: null, step: 0, totalSteps: 0 });
       const recalcTimerRef = useRef(null);
       const simulationTimerRef = useRef(null);
       const simulationPlanRef = useRef(null);
@@ -1502,12 +1518,14 @@
             currentPlan.currentStep += 1;
             const step = Math.min(currentPlan.currentStep, currentPlan.totalSteps);
             const spot = currentPlan.prices[step];
+            const simulatedNow = currentPlan.simulatedDates[step];
             const active = step < currentPlan.totalSteps;
             const next = {
               active,
               paused: false,
               spot,
               initialSpot: currentPlan.initialSpot,
+              simulatedNow,
               step,
               totalSteps: currentPlan.totalSteps
             };
@@ -1533,10 +1551,18 @@
           }
           if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
           const totalSteps = Math.max(1, Math.ceil((minutes * 60) / intervalSeconds));
+          const simulationStartTime = Date.now();
+          const expiration = nearestExpirationTime(payload?.chain?.options || [], payload?.strategy?.expiration);
+          const daysToExpiration = expiration
+            ? Math.max(1, (expiration - simulationStartTime) / 86400000)
+            : 50;
+          const daysPerStep = daysToExpiration / totalSteps;
           const finalDrift = (Math.random() * 0.2) - 0.1;
           const prices = [];
+          const simulatedDates = [];
           let last = startSpot;
           for (let step = 0; step <= totalSteps; step += 1) {
+            simulatedDates.push(simulationStartTime + (daysPerStep * step * 86400000));
             if (step === 0) {
               prices.push(Number(startSpot.toFixed(2)));
               continue;
@@ -1554,14 +1580,15 @@
             totalSteps,
             intervalMs: intervalSeconds * 1000,
             initialSpot: startSpot,
+            simulatedDates,
             paused: false
           };
           simulationPlanRef.current = plan;
-          const next = { active: true, paused: false, spot: prices[0], initialSpot: startSpot, step: 0, totalSteps };
+          const next = { active: true, paused: false, spot: prices[0], initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
           setSimulation(next);
           emitSimulationStatus(next);
           scheduleSimulation(plan);
-          message.success(`Simulacion iniciada por ${minutes} min. Intervalo: ${intervalSeconds}s.`);
+          message.success(`Simulacion iniciada por ${minutes} min. Intervalo: ${intervalSeconds}s. Avance: ${formatNumber(daysPerStep, 2)} dias/tick.`);
         }
 
         function toggleSimulationPause() {
@@ -1578,6 +1605,7 @@
               paused: false,
               spot: plan.prices[plan.currentStep],
               initialSpot: plan.initialSpot,
+              simulatedNow: plan.simulatedDates[plan.currentStep],
               step: plan.currentStep,
               totalSteps: plan.totalSteps
             };
@@ -1595,6 +1623,7 @@
             paused: true,
             spot: plan.prices[plan.currentStep],
             initialSpot: plan.initialSpot,
+            simulatedNow: plan.simulatedDates[plan.currentStep],
             step: plan.currentStep,
             totalSteps: plan.totalSteps
           };
@@ -1673,14 +1702,16 @@
       const fixedLegs = makeFixedLegs(strategy.legs);
       const fixedHistory = makeFixedHistory(strategy.history);
       const simulationSpot = simulation.spot || null;
+      const simulatedNow = simulation.simulatedNow || Date.now();
       const chainOptions = simulationSpot
-        ? simulateOptionChain(rawChainOptions, simulationSpot, strategy)
+        ? simulateOptionChain(rawChainOptions, simulationSpot, strategy, simulatedNow)
         : rawChainOptions;
       const calculation = simulationSpot
         ? calculateLocalStrategySnapshot({
             strategy: { ...strategy, legs: fixedLegs, history: fixedHistory },
             options: chainOptions,
-            spot: simulationSpot
+            spot: simulationSpot,
+            simulatedNow
           })
         : payload.calculation;
       if (strategy.legs.length !== fixedLegs.length || strategy.legs.some((leg, index) => leg.id !== fixedLegs[index].id || leg.type !== fixedLegs[index].type)) {
@@ -1729,6 +1760,21 @@
         strategy.history = history;
         applyStrategyChange({ ...strategy, history });
       };
+
+      function clearHistory() {
+        const history = makeFixedHistory(strategy.history).map((row) => ({
+          ...row,
+          date: '',
+          quantity: '',
+          symbol: '',
+          premium: '',
+          manualPrice: '',
+          realized: 0
+        }));
+        strategy.history = history;
+        applyStrategyChange({ ...strategy, history });
+        message.success('Historial del dia limpiado.');
+      }
 
       function mergeHistoryTrade(existingRow, trade) {
         const existingQuantity = parseNumeric(existingRow.quantity) ?? 0;
@@ -1962,7 +2008,7 @@
           type: leg.type,
           spot: targetSpot,
           strike,
-          years: yearsToExpiration(contract?.expiration || strategy.expiration),
+          years: yearsToExpiration(contract?.expiration || strategy.expiration, simulatedNow),
           volatility,
           rate: Number(strategy.riskFreeRate || 0.125)
         });
@@ -2348,6 +2394,9 @@
       const simulationChangePercent = simulation.initialSpot && calculation.spot
         ? ((Number(calculation.spot) / Number(simulation.initialSpot)) - 1) * 100
         : null;
+      const simulationDateLabel = simulation.simulatedNow
+        ? dayjs(simulation.simulatedNow).format('DD/MM/YYYY')
+        : null;
 
       return (
         <>
@@ -2383,6 +2432,7 @@
                   </span>
                 ) : null}
               </div>
+              {simulationDateLabel ? <div className="metric-label">Fecha simulada {simulationDateLabel}</div> : null}
             </div>
             <div className="metric"><div className="metric-label">Neto inicial</div><div className="metric-value">{formatMoney(calculation.summary.net)}</div></div>
             <div className="metric"><div className="metric-label">Resultado hoy</div><div className={`metric-value ${calculation.summary.todayResult >= 0 ? 'positive' : 'negative'}`}>{formatMoney(calculation.summary.todayResult)}</div></div>
@@ -2477,7 +2527,18 @@
 
             <section className="panel">
               <div className="panel-header">
-                <div className="panel-title">Historial del dia</div>
+                <Space size={8}>
+                  <div className="panel-title">Historial del dia</div>
+                  <Popconfirm
+                    title="Limpiar historial"
+                    description="Borra todas las operaciones del historial del dia."
+                    okText="Limpiar"
+                    cancelText="Cancelar"
+                    onConfirm={clearHistory}
+                  >
+                    <Button size="small" danger>Limpiar</Button>
+                  </Popconfirm>
+                </Space>
                 <span className="muted">cantidad/base/prima</span>
               </div>
               <SpreadsheetInputGrid
