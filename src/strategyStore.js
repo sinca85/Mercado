@@ -161,6 +161,7 @@ function normalizeStrategy(input = {}) {
     riskFreeRate: input.riskFreeRate ?? 0.125,
     volatility: input.volatility ?? 0.4,
     useAutoIv: Boolean(input.useAutoIv),
+    simulationEnabled: Boolean(input.simulationEnabled),
     legs: normalizeLegs(input.legs),
     history: normalizeHistory(input.history)
   };

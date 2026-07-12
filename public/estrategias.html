@@ -1478,7 +1478,7 @@
             <Button type="primary" size="large" onClick={() => form.submit()} loading={creating}>Usar planilla</Button>
           </section>
           <section className="landing-panel">
-            <Form form={form} layout="vertical" initialValues={{ name: 'GGAL Agosto', underlying: 'GGAL', monthCode: 'AG', volatility: 0.4, riskFreeRate: 0.125, useAutoIv: false }} onFinish={submit}>
+            <Form form={form} layout="vertical" initialValues={{ name: 'GGAL Agosto', underlying: 'GGAL', monthCode: 'AG', volatility: 0.4, riskFreeRate: 0.125, useAutoIv: false, simulationEnabled: false }} onFinish={submit}>
               <Form.Item name="name" label="Nombre">
                 <Input size="large" />
               </Form.Item>
@@ -1494,6 +1494,9 @@
                 </Form.Item>
                 <Form.Item name="riskFreeRate" label="Tasa libre de riesgo">
                   <InputNumber size="large" min={0} step={0.005} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item name="simulationEnabled" label="Simulacion" valuePropName="checked">
+                  <Switch checkedChildren="On" unCheckedChildren="Off" />
                 </Form.Item>
               </div>
             </Form>
@@ -1518,7 +1521,7 @@
       );
     }
 
-    function StrategyPage({ initialId, onStrategyNameChange }) {
+    function StrategyPage({ initialId, onStrategyNameChange, onSimulationEnabledChange }) {
       const [id, setId] = useState(initialId);
       const [loading, setLoading] = useState(Boolean(initialId));
       const [saving, setSaving] = useState(false);
@@ -1726,6 +1729,10 @@
       useEffect(() => {
         onStrategyNameChange?.(payload?.strategy?.name || '');
       }, [payload?.strategy?.name, onStrategyNameChange]);
+
+      useEffect(() => {
+        onSimulationEnabledChange?.(Boolean(payload?.strategy?.simulationEnabled));
+      }, [payload?.strategy?.simulationEnabled, onSimulationEnabledChange]);
 
       useEffect(() => {
         const options = payload?.chain?.options || [];
@@ -2473,6 +2480,14 @@
       ];
 
       const updateMeta = (patch) => {
+        if (Object.prototype.hasOwnProperty.call(patch, 'simulationEnabled') && !patch.simulationEnabled) {
+          if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
+          simulationTimerRef.current = null;
+          simulationPlanRef.current = null;
+          const stoppedSimulation = { active: false, paused: false, completed: false, spot: null, previousSpot: null, initialSpot: null, simulatedNow: null, step: 0, totalSteps: 0 };
+          setSimulation(stoppedSimulation);
+          window.dispatchEvent(new CustomEvent('sabro:simulationStatus', { detail: stoppedSimulation }));
+        }
         applyStrategyChange({ ...strategy, ...patch });
       };
       const simulationChangePercent = simulation.previousSpot && calculation.spot
@@ -2497,6 +2512,15 @@
                 checkedChildren="Auto"
                 unCheckedChildren="Manual"
                 onChange={(useAutoIv) => updateMeta({ useAutoIv })}
+              />
+            </Space>
+            <Space size={6} align="center">
+              <span className="muted">Simulacion</span>
+              <Switch
+                checked={Boolean(strategy.simulationEnabled)}
+                checkedChildren="On"
+                unCheckedChildren="Off"
+                onChange={(simulationEnabled) => updateMeta({ simulationEnabled })}
               />
             </Space>
             <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => saveStrategy(strategy)}>Guardar y recalcular</Button>
@@ -2674,6 +2698,7 @@
 
     function App() {
       const [strategyName, setStrategyName] = useState('');
+      const [simulationEnabled, setSimulationEnabled] = useState(false);
       const [simulationMinutes, setSimulationMinutes] = useState(5);
       const [simulationIntervalSeconds, setSimulationIntervalSeconds] = useState(60);
       const [simulationManual, setSimulationManual] = useState(false);
@@ -2710,52 +2735,60 @@
               </div>
               <Space>
                 <Button href="/cotizaciones">Cotizaciones</Button>
-                <InputNumber
-                  size="small"
-                  min={1}
-                  max={120}
-                  step={1}
-                  value={simulationMinutes}
-                  addonAfter="min"
-                  style={{ width: 104 }}
-                  onChange={(value) => setSimulationMinutes(value || 1)}
-                />
-                <InputNumber
-                  size="small"
-                  min={1}
-                  max={3600}
-                  step={5}
-                  value={simulationIntervalSeconds}
-                  addonAfter="seg"
-                  style={{ width: 106 }}
-                  onChange={(value) => setSimulationIntervalSeconds(value || 1)}
-                />
-                <Space size={4}>
-                  <span className="muted">Manual</span>
-                  <Switch
-                    size="small"
-                    checked={simulationManual}
-                    disabled={simulationStatus.active || simulationStatus.paused}
-                    onChange={setSimulationManual}
-                  />
-                </Space>
-                <Button icon={<PlayCircleOutlined />} onClick={startSimulation} disabled={simulationStatus.active || simulationStatus.paused}>
-                  {simulationStatus.active || simulationStatus.paused ? `Sim ${simulationStatus.step}/${simulationStatus.totalSteps}` : 'Iniciar simulacion'}
-                </Button>
-                <Button
-                  icon={simulationStatus.paused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
-                  onClick={toggleSimulationPause}
-                  disabled={!simulationStatus.active && !simulationStatus.paused}
-                >
-                  {simulationStatus.paused ? 'Reanudar' : 'Pausar'}
-                </Button>
-                {simulationStatus.active && simulationStatus.manual ? <Tag color="blue">Barra = siguiente tick</Tag> : null}
-                {simulationStatus.completed ? <Tag color="green">Simulacion completa</Tag> : null}
+                {simulationEnabled ? (
+                  <>
+                    <InputNumber
+                      size="small"
+                      min={1}
+                      max={120}
+                      step={1}
+                      value={simulationMinutes}
+                      addonAfter="min"
+                      style={{ width: 104 }}
+                      onChange={(value) => setSimulationMinutes(value || 1)}
+                    />
+                    <InputNumber
+                      size="small"
+                      min={1}
+                      max={3600}
+                      step={5}
+                      value={simulationIntervalSeconds}
+                      addonAfter="seg"
+                      style={{ width: 106 }}
+                      onChange={(value) => setSimulationIntervalSeconds(value || 1)}
+                    />
+                    <Space size={4}>
+                      <span className="muted">Manual</span>
+                      <Switch
+                        size="small"
+                        checked={simulationManual}
+                        disabled={simulationStatus.active || simulationStatus.paused}
+                        onChange={setSimulationManual}
+                      />
+                    </Space>
+                    <Button icon={<PlayCircleOutlined />} onClick={startSimulation} disabled={simulationStatus.active || simulationStatus.paused}>
+                      {simulationStatus.active || simulationStatus.paused ? `Sim ${simulationStatus.step}/${simulationStatus.totalSteps}` : 'Iniciar simulacion'}
+                    </Button>
+                    <Button
+                      icon={simulationStatus.paused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+                      onClick={toggleSimulationPause}
+                      disabled={!simulationStatus.active && !simulationStatus.paused}
+                    >
+                      {simulationStatus.paused ? 'Reanudar' : 'Pausar'}
+                    </Button>
+                    {simulationStatus.active && simulationStatus.manual ? <Tag color="blue">Barra = siguiente tick</Tag> : null}
+                    {simulationStatus.completed ? <Tag color="green">Simulacion completa</Tag> : null}
+                  </>
+                ) : null}
                 <Button href="/" type="primary">Nueva estrategia</Button>
               </Space>
             </header>
             <div className="content">
-              <StrategyPage initialId={getStrategyIdFromPath()} onStrategyNameChange={setStrategyName} />
+              <StrategyPage
+                initialId={getStrategyIdFromPath()}
+                onStrategyNameChange={setStrategyName}
+                onSimulationEnabledChange={setSimulationEnabled}
+              />
             </div>
           </main>
         </ConfigProvider>
