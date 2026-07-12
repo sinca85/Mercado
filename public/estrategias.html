@@ -2792,8 +2792,8 @@
       const [simulationEnabled, setSimulationEnabled] = useState(false);
       const [simulationDays, setSimulationDays] = useState(30);
       const [simulationDaysTouched, setSimulationDaysTouched] = useState(false);
-      const [simulationMode, setSimulationMode] = useState('random');
-      const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, completed: false, manual: true, mode: 'random', step: 0, totalSteps: 0, spot: null, previousSpot: null, initialSpot: null });
+      const [simulationMode, setSimulationMode] = useState('historical');
+      const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, completed: false, manual: true, mode: 'historical', step: 0, totalSteps: 0, spot: null, previousSpot: null, initialSpot: null });
       const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
 
       useEffect(() => {
