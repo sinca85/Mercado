@@ -1074,6 +1074,42 @@
         .map(({ rawTime, ...bar }) => bar);
     }
 
+    function historicalSimulationWindow(payload, days, historyCount = 60) {
+      const bars = historicalDailyBars(payload);
+      const needed = historyCount + days;
+      if (bars.length < needed) return { changes: [], historyBars: [], simulationSourceBars: [] };
+      const start = Math.floor(Math.random() * Math.max(1, bars.length - needed + 1));
+      const selected = bars.slice(start, start + needed);
+      const historyBars = selected.slice(0, historyCount);
+      const simulationSourceBars = selected.slice(historyCount);
+      const changes = simulationSourceBars.map((bar, index) => {
+        const previous = index === 0 ? historyBars[historyBars.length - 1] : simulationSourceBars[index - 1];
+        return previous?.close > 0 && bar.close > 0 ? (bar.close / previous.close) - 1 : null;
+      }).filter((value) => Number.isFinite(value));
+      return { changes, historyBars, simulationSourceBars };
+    }
+
+    function isoDateFromTime(time) {
+      return new Date(time).toISOString().slice(0, 10);
+    }
+
+    function randomHistoricalRequestRange(days, historyCount = 60) {
+      const today = startOfLocalDay();
+      const maxLookbackDays = 730;
+      const windowCalendarDays = Math.min(700, Math.max(180, Math.ceil((days + historyCount) * 3.2)));
+      const latestEndOffset = 2;
+      const maxEndOffset = Math.max(latestEndOffset + 1, maxLookbackDays - windowCalendarDays);
+      const endOffset = latestEndOffset + Math.floor(Math.random() * Math.max(1, maxEndOffset - latestEndOffset));
+      const end = new Date(today.getTime());
+      end.setDate(end.getDate() - endOffset);
+      const start = new Date(end.getTime());
+      start.setDate(start.getDate() - windowCalendarDays);
+      return {
+        fechaDesde: isoDateFromTime(start.getTime()),
+        fechaHasta: isoDateFromTime(end.getTime())
+      };
+    }
+
     function scaleHistoricalBarsToSpot(bars, spot, count = 60) {
       const selected = bars.slice(-count);
       const lastClose = selected[selected.length - 1]?.close;
@@ -1086,6 +1122,25 @@
         low: Number((bar.low * factor).toFixed(2)),
         close: Number((bar.close * factor).toFixed(2))
       }));
+    }
+
+    function scaledSimulationBarsFromHistorical(sourceBars, historyBars, spot) {
+      const previousClose = historyBars[historyBars.length - 1]?.close;
+      if (!(previousClose > 0) || !(spot > 0)) return [];
+      let lastClose = spot;
+      return sourceBars.map((bar, index) => {
+        const sourcePrevious = index === 0 ? previousClose : sourceBars[index - 1].close;
+        const scale = sourcePrevious > 0 ? lastClose / sourcePrevious : 1;
+        const next = {
+          time: bar.time,
+          open: Number((bar.open * scale).toFixed(2)),
+          high: Number((bar.high * scale).toFixed(2)),
+          low: Number((bar.low * scale).toFixed(2)),
+          close: Number((bar.close * scale).toFixed(2))
+        };
+        lastClose = next.close;
+        return next;
+      });
     }
 
     function chartStorageKey(strategyId) {
@@ -1797,11 +1852,16 @@
         }
 
         async function historicalDataForSimulation({ underlying, days }) {
-          const response = await requestJson(`/api/historical/${encodeURIComponent(underlying || 'GGAL')}?days=${Math.max(days * 4, 120)}`);
-          return {
-            changes: historicalDailyChanges(response, days),
-            bars: historicalDailyBars(response)
-          };
+          const historyCount = 60;
+          const range = randomHistoricalRequestRange(days, historyCount);
+          const params = new URLSearchParams({
+            days: String(Math.max(days + historyCount, 120)),
+            fechaDesde: range.fechaDesde,
+            fechaHasta: range.fechaHasta
+          });
+          const response = await requestJson(`/api/historical/${encodeURIComponent(underlying || 'GGAL')}?${params.toString()}`);
+          const windowData = historicalSimulationWindow(response, days, historyCount);
+          return { ...windowData, range };
         }
 
         async function startSimulation(event) {
@@ -1817,11 +1877,15 @@
           const finalDrift = (Math.random() * 0.2) - 0.1;
           let historicalChanges = [];
           let historicalBars = [];
+          let historicalSimulationBars = [];
+          let historicalRange = null;
           if (mode === 'historical') {
             try {
               const historicalData = await historicalDataForSimulation({ underlying: payload?.strategy?.underlying || 'GGAL', days: totalSteps });
               historicalChanges = historicalData.changes;
-              historicalBars = historicalData.bars;
+              historicalBars = historicalData.historyBars;
+              historicalSimulationBars = historicalData.simulationSourceBars;
+              historicalRange = historicalData.range;
               if (historicalChanges.length < totalSteps) {
                 message.warning('No hubo suficientes datos historicos. Uso modo aleatorio.');
               }
@@ -1841,6 +1905,7 @@
             let next;
             if (historicalChanges.length >= totalSteps) {
               next = last * (1 + historicalChanges[step - 1]);
+              last = next;
             } else {
               const progress = step / totalSteps;
               const target = startSpot * (1 + finalDrift * progress);
@@ -1849,21 +1914,24 @@
               const direction = last <= startSpot * 0.92 ? 1 : last >= startSpot * 1.08 ? -1 : preferredDirection;
               const dailyMovePercent = 0.015 + Math.random() * 0.065;
               next = last * (1 + direction * dailyMovePercent);
+              last = Math.max(startSpot * 0.9, Math.min(startSpot * 1.1, next));
             }
-            last = Math.max(startSpot * 0.9, Math.min(startSpot * 1.1, next));
             prices.push(Number(last.toFixed(2)));
           }
-          const simulationBars = prices.slice(1).map((close, index) => makeSimulatedBar({
-            time: simulatedDates[index + 1],
-            open: prices[index],
-            close,
-            seed: `${id}-${index + 1}-${close}`
-          }));
+          const simulationBars = historicalChanges.length >= totalSteps
+            ? scaledSimulationBarsFromHistorical(historicalSimulationBars, historicalBars, startSpot)
+            : prices.slice(1).map((close, index) => makeSimulatedBar({
+                time: simulatedDates[index + 1],
+                open: prices[index],
+                close,
+                seed: `${id}-${index + 1}-${close}`
+              }));
           const chartState = {
             strategyId: id,
             strategyName: payload?.strategy?.name || '',
             underlying: payload?.strategy?.underlying || 'GGAL',
             mode: historicalChanges.length >= totalSteps ? 'historical' : 'random',
+            historicalRange,
             step: 0,
             totalSteps,
             initialSpot: startSpot,

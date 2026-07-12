@@ -395,6 +395,10 @@
       stepEl.textContent = `${Number(state?.step || 0)}/${Number(state?.totalSteps || 0)}`;
       const last = bars[bars.length - 1];
       lastEl.textContent = last ? `Ult ${formatNumber(last.close)}` : 'Sin datos';
+      const rangeLabel = state?.historicalRange?.fechaDesde && state?.historicalRange?.fechaHasta
+        ? ` | rango ${state.historicalRange.fechaDesde} a ${state.historicalRange.fechaHasta}`
+        : '';
+      if (bars.length) subtitleEl.textContent += rangeLabel;
       series.setData(bars);
       if (bars.length && !didFitInitialContent) {
         chart.timeScale().fitContent();
