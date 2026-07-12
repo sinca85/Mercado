@@ -1852,10 +1852,10 @@
         }
 
         async function historicalDataForSimulation({ underlying, days }) {
-          const historyCount = 60;
+          const historyCount = 120;
           const range = randomHistoricalRequestRange(days, historyCount);
           const params = new URLSearchParams({
-            days: String(Math.max(days + historyCount, 120)),
+            days: String(Math.max(days + historyCount, 180)),
             fechaDesde: range.fechaDesde,
             fechaHasta: range.fechaHasta
           });
@@ -1935,7 +1935,7 @@
             step: 0,
             totalSteps,
             initialSpot: startSpot,
-            historicalBars: scaleHistoricalBarsToSpot(historicalBars, startSpot, 60),
+            historicalBars: scaleHistoricalBarsToSpot(historicalBars, startSpot, 120),
             simulationBars,
             active: true,
             completed: false,

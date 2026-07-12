@@ -136,6 +136,7 @@
     .drawing-layer.drawing-enabled {
       cursor: crosshair;
       pointer-events: auto;
+      background: rgba(0, 0, 0, 0);
     }
 
     .drawn-line {
@@ -290,14 +291,39 @@
       return element;
     }
 
+    function makeLineFromPoints(start, end) {
+      return {
+        type: drawingTool,
+        x1: Number(start.x.toFixed(1)),
+        y1: Number(start.y.toFixed(1)),
+        x2: Number(end.x.toFixed(1)),
+        y2: Number((drawingTool === 'horizontal' ? start.y : end.y).toFixed(1))
+      };
+    }
+
+    function clearPreviewLine() {
+      if (previewLine) previewLine.remove();
+      previewLine = null;
+      drawingStart = null;
+    }
+
     function renderDrawings() {
       drawingLayer.innerHTML = '';
+      const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      hitArea.setAttribute('x', 0);
+      hitArea.setAttribute('y', 0);
+      hitArea.setAttribute('width', '100%');
+      hitArea.setAttribute('height', '100%');
+      hitArea.setAttribute('fill', 'transparent');
+      hitArea.setAttribute('pointer-events', 'all');
+      drawingLayer.appendChild(hitArea);
       for (const drawing of drawings) {
         drawingLayer.appendChild(lineElement(drawing));
       }
     }
 
     function setDrawingTool(tool) {
+      clearPreviewLine();
       drawingTool = tool;
       drawingLayer.classList.toggle('drawing-enabled', drawingTool !== 'cursor');
       document.querySelectorAll('[data-tool]').forEach((button) => {
@@ -324,16 +350,21 @@
     drawingLayer.addEventListener('pointerdown', (event) => {
       if (drawingTool === 'cursor') return;
       event.preventDefault();
-      drawingStart = pointFromEvent(event);
-      const initialLine = {
-        x1: drawingStart.x,
-        y1: drawingStart.y,
-        x2: drawingStart.x,
-        y2: drawingStart.y
-      };
-      previewLine = lineElement(initialLine, 'preview');
-      drawingLayer.appendChild(previewLine);
-      drawingLayer.setPointerCapture(event.pointerId);
+      const point = pointFromEvent(event);
+      if (!drawingStart) {
+        drawingStart = point;
+        previewLine = lineElement(makeLineFromPoints(drawingStart, point), 'preview');
+        drawingLayer.appendChild(previewLine);
+        return;
+      }
+
+      const line = makeLineFromPoints(drawingStart, point);
+      clearPreviewLine();
+      if (Math.abs(line.x2 - line.x1) > 4 || Math.abs(line.y2 - line.y1) > 4) {
+        drawings.push(line);
+        saveDrawings();
+        renderDrawings();
+      }
     });
 
     drawingLayer.addEventListener('pointermove', (event) => {
@@ -346,30 +377,11 @@
     });
 
     drawingLayer.addEventListener('pointerup', (event) => {
-      if (!drawingStart || !previewLine) return;
-      event.preventDefault();
-      const point = pointFromEvent(event);
-      const line = {
-        type: drawingTool,
-        x1: Number(drawingStart.x.toFixed(1)),
-        y1: Number(drawingStart.y.toFixed(1)),
-        x2: Number(point.x.toFixed(1)),
-        y2: Number((drawingTool === 'horizontal' ? drawingStart.y : point.y).toFixed(1))
-      };
-      previewLine.remove();
-      previewLine = null;
-      drawingStart = null;
-      if (Math.abs(line.x2 - line.x1) > 4 || Math.abs(line.y2 - line.y1) > 4) {
-        drawings.push(line);
-        saveDrawings();
-        renderDrawings();
-      }
+      if (drawingTool !== 'cursor') event.preventDefault();
     });
 
     drawingLayer.addEventListener('pointercancel', () => {
-      if (previewLine) previewLine.remove();
-      previewLine = null;
-      drawingStart = null;
+      clearPreviewLine();
     });
 
     function barsForState(state) {
