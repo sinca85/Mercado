@@ -1778,6 +1778,16 @@
       const recalcTimerRef = useRef(null);
       const simulationTimerRef = useRef(null);
       const simulationPlanRef = useRef(null);
+      const payloadRef = useRef(null);
+      const idRef = useRef(initialId);
+
+      useEffect(() => {
+        payloadRef.current = payload;
+      }, [payload]);
+
+      useEffect(() => {
+        idRef.current = id;
+      }, [id]);
 
       async function loadStrategy(strategyId = id, { force = false } = {}) {
         if (!strategyId) return;
@@ -1803,6 +1813,27 @@
       useEffect(() => {
         function emitSimulationStatus(next) {
           window.dispatchEvent(new CustomEvent('sabro:simulationStatus', { detail: next }));
+        }
+
+        function calculateSimulationHistoryResult(spot, simulatedNow) {
+          const currentPayload = payloadRef.current;
+          const currentStrategy = currentPayload?.strategy || {};
+          const currentOptions = simulateOptionChain(currentPayload?.chain?.options || [], spot, currentStrategy, simulatedNow);
+          const snapshot = calculateLocalStrategySnapshot({
+            strategy: {
+              ...currentStrategy,
+              legs: makeFixedLegs(currentStrategy.legs),
+              history: makeFixedHistory(currentStrategy.history)
+            },
+            options: currentOptions,
+            spot,
+            simulatedNow
+          });
+          const result = Number(snapshot?.summary?.todayResult);
+          if (!Number.isFinite(result)) {
+            throw new Error('resultado final invalido');
+          }
+          return result;
         }
 
         function advanceSimulationTick() {
@@ -1838,27 +1869,36 @@
               updatedAt: new Date().toISOString()
             };
             currentPlan.chartState = chartState;
-            publishSimulationChartState(id, chartState);
+            publishSimulationChartState(idRef.current, chartState);
           }
 
           if (!active) {
             if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
             simulationTimerRef.current = null;
             simulationPlanRef.current = null;
-            if (!currentPlan.savedHistory && id) {
+            const currentId = idRef.current;
+            if (!currentPlan.savedHistory && currentId) {
               currentPlan.savedHistory = true;
-              requestJson(`/api/strategies/${id}/simulation-history`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  completedAt: new Date().toISOString(),
-                  result: currentPlan.finalResult,
-                  spot,
-                  mode: currentPlan.mode,
-                  steps: currentPlan.totalSteps
+              let finalResult = null;
+              try {
+                finalResult = calculateSimulationHistoryResult(spot, simulatedNow);
+              } catch (error) {
+                message.error(`No pude calcular el resultado final para el historial: ${error.message}`);
+              }
+              if (Number.isFinite(finalResult)) {
+                requestJson(`/api/strategies/${currentId}/simulation-history`, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    completedAt: new Date().toISOString(),
+                    result: finalResult,
+                    spot,
+                    mode: currentPlan.mode,
+                    steps: currentPlan.totalSteps
+                  })
                 })
-              })
-                .then(() => window.dispatchEvent(new CustomEvent('sabro:simulationHistoryUpdated')))
-                .catch((error) => message.error(`No pude guardar historial de simulacion: ${error.message}`));
+                  .then(() => window.dispatchEvent(new CustomEvent('sabro:simulationHistoryUpdated')))
+                  .catch((error) => message.error(`No pude guardar historial de simulacion: ${error.message}`));
+              }
             }
             message.success('Simulacion finalizada.');
           }
@@ -1878,9 +1918,11 @@
         }
 
         async function startSimulation(event) {
+          const currentPayload = payloadRef.current;
+          const currentId = idRef.current;
           const totalSteps = Math.max(1, Math.min(260, Number(event.detail?.days || 30)));
           const mode = event.detail?.mode === 'historical' ? 'historical' : 'random';
-          const startSpot = Number(payload?.calculation?.spot || payload?.strategy?.targetSpot || 0);
+          const startSpot = Number(currentPayload?.calculation?.spot || currentPayload?.strategy?.targetSpot || 0);
           if (!(startSpot > 0)) {
             message.error('No hay spot base para iniciar la simulacion.');
             return;
@@ -1894,7 +1936,7 @@
           let historicalRange = null;
           if (mode === 'historical') {
             try {
-              const historicalData = await historicalDataForSimulation({ underlying: payload?.strategy?.underlying || 'GGAL', days: totalSteps });
+              const historicalData = await historicalDataForSimulation({ underlying: currentPayload?.strategy?.underlying || 'GGAL', days: totalSteps });
               historicalChanges = historicalData.changes;
               historicalBars = historicalData.historyBars;
               historicalSimulationBars = historicalData.simulationSourceBars;
@@ -1937,25 +1979,12 @@
                 time: simulatedDates[index + 1],
                 open: prices[index],
                 close,
-                seed: `${id}-${index + 1}-${close}`
+                seed: `${currentId}-${index + 1}-${close}`
               }));
-          const finalSpot = prices[prices.length - 1];
-          const finalNow = simulatedDates[simulatedDates.length - 1];
-          const finalOptions = simulateOptionChain(payload?.chain?.options || [], finalSpot, payload?.strategy || {}, finalNow);
-          const finalCalculation = calculateLocalStrategySnapshot({
-            strategy: {
-              ...(payload?.strategy || {}),
-              legs: makeFixedLegs(payload?.strategy?.legs),
-              history: makeFixedHistory(payload?.strategy?.history)
-            },
-            options: finalOptions,
-            spot: finalSpot,
-            simulatedNow: finalNow
-          });
           const chartState = {
-            strategyId: id,
-            strategyName: payload?.strategy?.name || '',
-            underlying: payload?.strategy?.underlying || 'GGAL',
+            strategyId: currentId,
+            strategyName: currentPayload?.strategy?.name || '',
+            underlying: currentPayload?.strategy?.underlying || 'GGAL',
             mode: historicalChanges.length >= totalSteps ? 'historical' : 'random',
             historicalRange,
             step: 0,
@@ -1977,14 +2006,13 @@
             mode: historicalChanges.length >= totalSteps ? 'historical' : 'random',
             paused: false,
             chartState,
-            finalResult: finalCalculation.summary.todayResult,
             savedHistory: false
           };
           simulationPlanRef.current = plan;
           const next = { active: true, paused: false, completed: false, manual: true, mode: plan.mode, spot: prices[0], previousSpot: null, initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
           setSimulation(next);
           emitSimulationStatus(next);
-          publishSimulationChartState(id, chartState);
+          publishSimulationChartState(currentId, chartState);
           message.success(`Simulacion iniciada: ${totalSteps} dias, modo ${plan.mode === 'historical' ? 'historico' : 'aleatorio'}. Barra = siguiente dia.`);
         }
 

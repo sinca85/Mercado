@@ -174,7 +174,7 @@ function normalizeSimulationHistory(inputHistory) {
     .map((row) => ({
       id: row.id || makeId(),
       completedAt: row.completedAt || row.date || new Date().toISOString(),
-      result: Number(row.result ?? row.todayResult ?? 0),
+      result: Number(row.result ?? row.todayResult),
       spot: row.spot === null || row.spot === undefined ? null : Number(row.spot),
       mode: row.mode || null,
       steps: row.steps === null || row.steps === undefined ? null : Number(row.steps)
@@ -350,6 +350,12 @@ export async function listSimulationHistory(id) {
 
 export async function addSimulationHistoryEntry(id, input = {}) {
   const collection = await strategiesCollection();
+  const rawResult = input.result ?? input.todayResult;
+  if (!Number.isFinite(Number(rawResult))) {
+    const error = new Error('Resultado de simulacion invalido.');
+    error.status = 400;
+    throw error;
+  }
   const entry = normalizeSimulationHistory([{ ...input, id: makeId(), completedAt: input.completedAt || new Date().toISOString() }])[0];
   if (!entry) {
     const error = new Error('Resultado de simulacion invalido.');
