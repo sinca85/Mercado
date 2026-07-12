@@ -1095,7 +1095,7 @@
 
     function randomHistoricalRequestRange(days, historyCount = 60) {
       const today = startOfLocalDay();
-      const maxLookbackDays = 730;
+      const maxLookbackDays = 365 * 5;
       const windowCalendarDays = Math.min(700, Math.max(180, Math.ceil((days + historyCount) * 3.2)));
       const latestEndOffset = 2;
       const maxEndOffset = Math.max(latestEndOffset + 1, maxLookbackDays - windowCalendarDays);
