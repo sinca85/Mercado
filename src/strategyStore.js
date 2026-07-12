@@ -310,7 +310,8 @@ export async function updateStrategy(id, input = {}) {
       ...normalizeStrategy({ ...existing, ...input }),
       id,
       createdAt: existing.createdAt,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      simulationHistory: normalizeSimulationHistory(existing.simulationHistory || [])
     };
 
     await collection.updateOne({ id }, { $set: strategy });
@@ -330,7 +331,8 @@ export async function updateStrategy(id, input = {}) {
     ...normalizeStrategy({ ...existing, ...input }),
     id,
     createdAt: existing.createdAt,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    simulationHistory: normalizeSimulationHistory(existing.simulationHistory || [])
   };
 
   store.strategies[id] = strategy;
