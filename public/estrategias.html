@@ -1296,7 +1296,7 @@
         .filter((cells) => cells.some(Boolean));
     }
 
-    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest, targetHighlights = {} }) {
+    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest, targetHighlights = {}, onTypeDoubleClick }) {
       const columns = [
         { key: 'quantity', title: 'CANT', editable: true, width: 45 },
         { key: 'symbol', title: 'BASE', editable: true },
@@ -1583,7 +1583,12 @@
                 const type = getRowType(row);
                 return (
                   <tr key={row.id || `${type}-${rowIndex}`} className={type === 'PUT' ? 'type-put' : 'type-call'}>
-                    <td className="type-cell">{type}</td>
+                    <td
+                      className="type-cell"
+                      onDoubleClick={() => onTypeDoubleClick?.(row, rowIndex)}
+                    >
+                      {type}
+                    </td>
                     {columns.map((column, colIndex) => {
                       const highlight = column.key === 'symbol'
                         ? targetHighlights[String(row.symbol || '').toUpperCase()]
@@ -3060,6 +3065,7 @@
                 onUpdate={updateStrategyLegRow}
                 focusRequest={strategyGridFocus}
                 targetHighlights={bestTargetHighlights}
+                onTypeDoubleClick={(_row, rowIndex) => transferLegToHistory(rowIndex)}
               />
             </section>
 
