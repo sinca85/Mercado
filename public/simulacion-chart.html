@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <title>Grafico de Simulacion</title>
+  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1620;
+      --panel: #151f2d;
+      --line: #2d3a50;
+      --text: #eef3f8;
+      --muted: #91a0b2;
+      --blue: #2f93ff;
+      --green: #20c65a;
+      --red: #ff4d4f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 58px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #182232;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 19px;
+      font-weight: 900;
+    }
+
+    .subtitle {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .pill {
+      padding: 4px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #101824;
+      color: var(--text);
+    }
+
+    .chart-wrap {
+      height: calc(100vh - 58px);
+      padding: 12px;
+    }
+
+    #chart {
+      width: 100%;
+      height: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .empty {
+      position: fixed;
+      inset: 58px 0 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1 id="title">Grafico de simulacion</h1>
+      <div id="subtitle" class="subtitle">Esperando simulacion...</div>
+    </div>
+    <div class="status">
+      <span id="mode" class="pill">-</span>
+      <span id="step" class="pill">0/0</span>
+      <span id="last" class="pill">Sin datos</span>
+    </div>
+  </header>
+  <main class="chart-wrap">
+    <div id="chart"></div>
+  </main>
+  <div id="empty" class="empty">Inicia una simulacion desde la planilla para ver el grafico sincronizado.</div>
+
+  <script>
+    const strategyId = decodeURIComponent(location.pathname.split('/').filter(Boolean)[1] || 'current');
+    const storageKey = `sabro:simulation-chart:${strategyId}`;
+    const chartEl = document.getElementById('chart');
+    const emptyEl = document.getElementById('empty');
+    const titleEl = document.getElementById('title');
+    const subtitleEl = document.getElementById('subtitle');
+    const modeEl = document.getElementById('mode');
+    const stepEl = document.getElementById('step');
+    const lastEl = document.getElementById('last');
+
+    const chart = LightweightCharts.createChart(chartEl, {
+      autoSize: true,
+      layout: {
+        background: { color: '#151f2d' },
+        textColor: '#d8e1ec'
+      },
+      grid: {
+        vertLines: { color: '#223049' },
+        horzLines: { color: '#223049' }
+      },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal
+      },
+      timeScale: {
+        borderColor: '#334259',
+        timeVisible: true,
+        secondsVisible: false
+      },
+      rightPriceScale: {
+        borderColor: '#334259'
+      }
+    });
+
+    const series = chart.addCandlestickSeries({
+      upColor: '#20c65a',
+      downColor: '#ff4d4f',
+      borderUpColor: '#20c65a',
+      borderDownColor: '#ff4d4f',
+      wickUpColor: '#20c65a',
+      wickDownColor: '#ff4d4f',
+      priceFormat: {
+        type: 'price',
+        precision: 2,
+        minMove: 0.01
+      }
+    });
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(Number(value || 0));
+    }
+
+    function barsForState(state) {
+      const historicalBars = Array.isArray(state?.historicalBars) ? state.historicalBars : [];
+      const simulationBars = Array.isArray(state?.simulationBars) ? state.simulationBars : [];
+      const step = Math.max(0, Number(state?.step || 0));
+      return [
+        ...historicalBars,
+        ...simulationBars.slice(0, step)
+      ].filter((bar) => bar && bar.time && Number(bar.close) > 0);
+    }
+
+    function render(state) {
+      const bars = barsForState(state);
+      emptyEl.style.display = bars.length ? 'none' : 'grid';
+      titleEl.textContent = state?.strategyName
+        ? `${state.underlying || ''} - ${state.strategyName}`
+        : `Grafico ${state?.underlying || strategyId}`;
+      subtitleEl.textContent = bars.length
+        ? 'Historico reescalado al spot actual + barras simuladas sincronizadas'
+        : 'Esperando simulacion...';
+      modeEl.textContent = state?.mode === 'historical' ? 'Historico' : 'Aleatorio';
+      stepEl.textContent = `${Number(state?.step || 0)}/${Number(state?.totalSteps || 0)}`;
+      const last = bars[bars.length - 1];
+      lastEl.textContent = last ? `Ult ${formatNumber(last.close)}` : 'Sin datos';
+      series.setData(bars);
+      if (bars.length) chart.timeScale().fitContent();
+    }
+
+    function readStoredState() {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        return raw ? JSON.parse(raw) : null;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    render(readStoredState());
+
+    if ('BroadcastChannel' in window) {
+      const channel = new BroadcastChannel('sabro-simulation-chart');
+      channel.addEventListener('message', (event) => {
+        if (event.data?.type !== 'simulation-chart:update') return;
+        if (String(event.data.strategyId || 'current') !== strategyId) return;
+        render(event.data.state);
+      });
+    }
+
+    window.addEventListener('storage', (event) => {
+      if (event.key !== storageKey || !event.newValue) return;
+      try {
+        render(JSON.parse(event.newValue));
+      } catch (_error) {
+        render(null);
+      }
+    });
+  </script>
+</body>
+</html>

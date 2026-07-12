@@ -1048,6 +1048,83 @@
       return changes.slice(start, start + days);
     }
 
+    function historicalDailyBars(payload) {
+      const barsByDate = new Map();
+      for (const item of normalizeHistoricalItems(payload)) {
+        const date = historicalDateKey(item);
+        const close = historicalClose(item);
+        if (!date || !(close > 0)) continue;
+        const time = historicalTime(item);
+        const open = parseNumeric(item?.apertura) ?? close;
+        const high = parseNumeric(item?.maximo) ?? Math.max(open, close);
+        const low = parseNumeric(item?.minimo) ?? Math.min(open, close);
+        const previous = barsByDate.get(date);
+        if (previous && time < previous.rawTime) continue;
+        barsByDate.set(date, {
+          time: date,
+          rawTime: time,
+          open,
+          high: Math.max(high, open, close),
+          low: Math.min(low, open, close),
+          close
+        });
+      }
+      return Array.from(barsByDate.values())
+        .sort((a, b) => a.time.localeCompare(b.time))
+        .map(({ rawTime, ...bar }) => bar);
+    }
+
+    function scaleHistoricalBarsToSpot(bars, spot, count = 60) {
+      const selected = bars.slice(-count);
+      const lastClose = selected[selected.length - 1]?.close;
+      if (!(lastClose > 0) || !(spot > 0)) return [];
+      const factor = spot / lastClose;
+      return selected.map((bar) => ({
+        time: bar.time,
+        open: Number((bar.open * factor).toFixed(2)),
+        high: Number((bar.high * factor).toFixed(2)),
+        low: Number((bar.low * factor).toFixed(2)),
+        close: Number((bar.close * factor).toFixed(2))
+      }));
+    }
+
+    function chartStorageKey(strategyId) {
+      return `sabro:simulation-chart:${strategyId || 'current'}`;
+    }
+
+    function chartChannel() {
+      if (!('BroadcastChannel' in window)) return null;
+      return new BroadcastChannel('sabro-simulation-chart');
+    }
+
+    function storeSimulationChartState(strategyId, state) {
+      try {
+        localStorage.setItem(chartStorageKey(strategyId), JSON.stringify(state));
+      } catch (_error) {
+        // localStorage can be unavailable in private contexts.
+      }
+    }
+
+    function publishSimulationChartState(strategyId, state) {
+      storeSimulationChartState(strategyId, state);
+      const channel = chartChannel();
+      if (!channel) return;
+      channel.postMessage({ type: 'simulation-chart:update', strategyId, state });
+      channel.close();
+    }
+
+    function makeSimulatedBar({ time, open, close, seed }) {
+      const drift = Math.abs(close / open - 1);
+      const wick = Math.max(0.006, Math.min(0.045, drift * 0.7 + Math.abs(stableNoise(seed)) * 0.025));
+      return {
+        time: dayjs(time).format('YYYY-MM-DD'),
+        open: Number(open.toFixed(2)),
+        high: Number((Math.max(open, close) * (1 + wick)).toFixed(2)),
+        low: Number((Math.min(open, close) * (1 - wick)).toFixed(2)),
+        close: Number(close.toFixed(2))
+      };
+    }
+
     function getStrategyIdFromPath() {
       const parts = window.location.pathname.split('/').filter(Boolean);
       if (parts[0] === 'estrategias' && parts[1]) return parts[1];
@@ -1699,6 +1776,17 @@
           };
           setSimulation(next);
           emitSimulationStatus(next);
+          if (currentPlan.chartState) {
+            const chartState = {
+              ...currentPlan.chartState,
+              step,
+              active,
+              completed: !active,
+              updatedAt: new Date().toISOString()
+            };
+            currentPlan.chartState = chartState;
+            publishSimulationChartState(id, chartState);
+          }
 
           if (!active) {
             if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
@@ -1708,9 +1796,12 @@
           }
         }
 
-        async function historicalChangesForSimulation({ underlying, days }) {
+        async function historicalDataForSimulation({ underlying, days }) {
           const response = await requestJson(`/api/historical/${encodeURIComponent(underlying || 'GGAL')}?days=${Math.max(days * 4, 120)}`);
-          return historicalDailyChanges(response, days);
+          return {
+            changes: historicalDailyChanges(response, days),
+            bars: historicalDailyBars(response)
+          };
         }
 
         async function startSimulation(event) {
@@ -1725,9 +1816,12 @@
           const simulationStartTime = Date.now();
           const finalDrift = (Math.random() * 0.2) - 0.1;
           let historicalChanges = [];
+          let historicalBars = [];
           if (mode === 'historical') {
             try {
-              historicalChanges = await historicalChangesForSimulation({ underlying: payload?.strategy?.underlying || 'GGAL', days: totalSteps });
+              const historicalData = await historicalDataForSimulation({ underlying: payload?.strategy?.underlying || 'GGAL', days: totalSteps });
+              historicalChanges = historicalData.changes;
+              historicalBars = historicalData.bars;
               if (historicalChanges.length < totalSteps) {
                 message.warning('No hubo suficientes datos historicos. Uso modo aleatorio.');
               }
@@ -1759,6 +1853,26 @@
             last = Math.max(startSpot * 0.9, Math.min(startSpot * 1.1, next));
             prices.push(Number(last.toFixed(2)));
           }
+          const simulationBars = prices.slice(1).map((close, index) => makeSimulatedBar({
+            time: simulatedDates[index + 1],
+            open: prices[index],
+            close,
+            seed: `${id}-${index + 1}-${close}`
+          }));
+          const chartState = {
+            strategyId: id,
+            strategyName: payload?.strategy?.name || '',
+            underlying: payload?.strategy?.underlying || 'GGAL',
+            mode: historicalChanges.length >= totalSteps ? 'historical' : 'random',
+            step: 0,
+            totalSteps,
+            initialSpot: startSpot,
+            historicalBars: scaleHistoricalBarsToSpot(historicalBars, startSpot, 60),
+            simulationBars,
+            active: true,
+            completed: false,
+            updatedAt: new Date().toISOString()
+          };
           const plan = {
             prices,
             currentStep: 0,
@@ -1767,12 +1881,14 @@
             simulatedDates,
             manual: true,
             mode: historicalChanges.length >= totalSteps ? 'historical' : 'random',
-            paused: false
+            paused: false,
+            chartState
           };
           simulationPlanRef.current = plan;
           const next = { active: true, paused: false, completed: false, manual: true, mode: plan.mode, spot: prices[0], previousSpot: null, initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
           setSimulation(next);
           emitSimulationStatus(next);
+          publishSimulationChartState(id, chartState);
           message.success(`Simulacion iniciada: ${totalSteps} dias, modo ${plan.mode === 'historical' ? 'historico' : 'aleatorio'}. Barra = siguiente dia.`);
         }
 
@@ -2834,6 +2950,7 @@
       const [simulationMode, setSimulationMode] = useState('historical');
       const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, completed: false, manual: true, mode: 'historical', step: 0, totalSteps: 0, spot: null, previousSpot: null, initialSpot: null });
       const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
+      const activeStrategyId = getStrategyIdFromPath();
 
       useEffect(() => {
         document.title = pageTitle;
@@ -2876,6 +2993,12 @@
                 <Button href="/cotizaciones">Cotizaciones</Button>
                 {simulationEnabled ? (
                   <>
+                    <Button
+                      onClick={() => window.open(`/simulacion-chart/${encodeURIComponent(activeStrategyId || 'current')}`, '_blank', 'noopener,noreferrer')}
+                      disabled={!activeStrategyId}
+                    >
+                      Ver grafico
+                    </Button>
                     <InputNumber
                       size="small"
                       min={1}

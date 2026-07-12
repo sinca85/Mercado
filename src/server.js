@@ -519,6 +519,10 @@ app.get('/cotizaciones', (_req, res) => {
   res.sendFile(path.join(publicDir, 'cotizaciones.html'));
 });
 
+app.get(['/simulacion-chart', '/simulacion-chart/:id'], (_req, res) => {
+  res.sendFile(path.join(publicDir, 'simulacion-chart.html'));
+});
+
 app.get(['/', '/estrategias', '/estrategias/:id', '/:id'], (_req, res) => {
   res.sendFile(path.join(publicDir, 'estrategias.html'));
 });
