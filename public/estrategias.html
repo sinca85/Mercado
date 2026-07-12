@@ -2548,6 +2548,34 @@
         });
       }
 
+      function focusStrategyQuantityFromHistory(row) {
+        if (!row?.symbol) return;
+        const historySymbol = String(row.symbol || '').toUpperCase();
+        const historyContract = chainOptions.find((option) => option.symbol === historySymbol);
+        const historyStrike = parseNumeric(historyContract?.strike);
+        const historyType = String(row.type || '').toUpperCase();
+        const exactIndex = strategyRowsWithTarget.findIndex((strategyRow) => (
+          String(strategyRow.symbol || '').toUpperCase() === historySymbol
+        ));
+        const fallbackIndex = exactIndex >= 0 ? exactIndex : strategyRowsWithTarget.findIndex((strategyRow) => {
+          if (String(strategyRow.type || '').toUpperCase() !== historyType) return false;
+          const contract = contractForLeg(strategyRow);
+          const strike = parseNumeric(strategyRow.result?.strike) ?? parseNumeric(contract?.strike);
+          return historyStrike !== null && strike !== null && Math.abs(strike - historyStrike) < 0.001;
+        });
+
+        if (fallbackIndex < 0) {
+          message.info('No encontre esa base en carga de estrategia.');
+          return;
+        }
+
+        setStrategyGridFocus({
+          row: fallbackIndex,
+          col: 0,
+          token: `history-${historySymbol}-${fallbackIndex}-${Date.now()}`
+        });
+      }
+
       const simulationRows = calculation.percentScenarios || [];
       const legColumns = [
         {
@@ -2969,9 +2997,11 @@
                 getRowType={(row) => row.type}
                 optionsByType={optionSelectOptionsByType}
                 premiumTitle="PRIMA/PRECIO"
-                onCellFocus={(rowIndex) => {
+                onCellFocus={(rowIndex, colIndex) => {
                   const row = historyRowsWithResults[rowIndex];
-                  if (row) setFocusedHistoryTarget({ type: row.type, index: row.tableIndex });
+                  if (!row) return;
+                  setFocusedHistoryTarget({ type: row.type, index: row.tableIndex });
+                  if (colIndex === 1) focusStrategyQuantityFromHistory(row);
                 }}
                 onUpdate={(rowIndex, patch) => {
                   const row = historyRowsWithResults[rowIndex];

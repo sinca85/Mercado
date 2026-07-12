@@ -256,7 +256,7 @@
       try {
         const raw = localStorage.getItem(drawingsKey);
         const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed : [];
+        return Array.isArray(parsed) ? parsed.filter((drawing) => drawing?.p1 && drawing?.p2) : [];
       } catch (_error) {
         return [];
       }
@@ -291,6 +291,14 @@
       };
     }
 
+    function chartPointFromEvent(event) {
+      const point = pointFromEvent(event);
+      const time = chart.timeScale().coordinateToTime(point.x);
+      const price = series.coordinateToPrice(point.y);
+      if (time === null || time === undefined || !(price > 0)) return null;
+      return { ...point, time, price };
+    }
+
     function lineElement(line, extraClass = '') {
       const element = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       element.setAttribute('x1', line.x1);
@@ -301,9 +309,30 @@
       return element;
     }
 
+    function drawingToScreenLine(drawing) {
+      const x1 = chart.timeScale().timeToCoordinate(drawing.p1.time);
+      const x2 = chart.timeScale().timeToCoordinate(drawing.p2.time);
+      const y1 = series.priceToCoordinate(drawing.p1.price);
+      const y2 = series.priceToCoordinate(drawing.p2.price);
+      if ([x1, x2, y1, y2].some((value) => value === null || value === undefined || !Number.isFinite(Number(value)))) {
+        return null;
+      }
+      return { x1, y1, x2, y2 };
+    }
+
     function makeLineFromPoints(start, end) {
+      const endPoint = drawingTool === 'horizontal'
+        ? { ...end, price: start.price, y: start.y }
+        : end;
       return {
         type: drawingTool,
+        p1: { time: start.time, price: Number(start.price.toFixed(4)) },
+        p2: { time: endPoint.time, price: Number(endPoint.price.toFixed(4)) }
+      };
+    }
+
+    function previewLineFromPoints(start, end) {
+      return {
         x1: Number(start.x.toFixed(1)),
         y1: Number(start.y.toFixed(1)),
         x2: Number(end.x.toFixed(1)),
@@ -328,7 +357,8 @@
       hitArea.setAttribute('pointer-events', 'all');
       drawingLayer.appendChild(hitArea);
       for (const drawing of drawings) {
-        drawingLayer.appendChild(lineElement(drawing));
+        const screenLine = drawingToScreenLine(drawing);
+        if (screenLine) drawingLayer.appendChild(lineElement(screenLine));
       }
     }
 
@@ -360,21 +390,24 @@
     drawingLayer.addEventListener('pointerdown', (event) => {
       if (drawingTool === 'cursor') return;
       event.preventDefault();
-      const point = pointFromEvent(event);
+      const point = chartPointFromEvent(event);
+      if (!point) return;
       if (!drawingStart) {
         drawingStart = point;
-        previewLine = lineElement(makeLineFromPoints(drawingStart, point), 'preview');
+        previewLine = lineElement(previewLineFromPoints(drawingStart, point), 'preview');
         drawingLayer.appendChild(previewLine);
         return;
       }
 
       const line = makeLineFromPoints(drawingStart, point);
+      const screenLine = drawingToScreenLine(line);
       clearPreviewLine();
-      if (Math.abs(line.x2 - line.x1) > 4 || Math.abs(line.y2 - line.y1) > 4) {
+      if (screenLine && (Math.abs(screenLine.x2 - screenLine.x1) > 4 || Math.abs(screenLine.y2 - screenLine.y1) > 4)) {
         drawings.push(line);
         saveDrawings();
         renderDrawings();
       }
+      setDrawingTool('cursor');
     });
 
     drawingLayer.addEventListener('pointermove', (event) => {
@@ -426,6 +459,7 @@
         chart.timeScale().fitContent();
         didFitInitialContent = true;
       }
+      requestAnimationFrame(renderDrawings);
     }
 
     function readStoredState() {
@@ -440,6 +474,16 @@
     render(readStoredState());
     syncDrawingLayerSize();
     renderDrawings();
+    chart.timeScale().subscribeVisibleLogicalRangeChange(() => renderDrawings());
+    chart.subscribeCrosshairMove(() => {
+      if (!drawingStart) renderDrawings();
+    });
+    ['wheel', 'pointerup', 'mouseup'].forEach((eventName) => {
+      chartEl.addEventListener(eventName, () => {
+        requestAnimationFrame(renderDrawings);
+        setTimeout(renderDrawings, 80);
+      }, { passive: true });
+    });
     new ResizeObserver(() => {
       syncDrawingLayerSize();
       renderDrawings();
