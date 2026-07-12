@@ -1377,8 +1377,6 @@
         setSelection({ start: next, end: next });
         onCellFocus?.(next.row, next.col);
         requestAnimationFrame(() => {
-          const cell = wrapRef.current?.querySelector(`[data-cell="${next.row}-${next.col}"]`);
-          cell?.scrollIntoView({ block: 'center', inline: 'nearest' });
           wrapRef.current?.focus({ preventScroll: true });
         });
       }, [focusRequest?.token]);
