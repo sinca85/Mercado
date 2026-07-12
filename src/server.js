@@ -12,6 +12,7 @@ import {
 } from './appsScriptClient.js';
 import {
   getAccessToken,
+  getHistoricalQuotes,
   getOperations,
   getOptionsPanel,
   getPortfolio,
@@ -207,6 +208,33 @@ app.get('/api/options/:symbol', async (req, res) => {
       requested: { market, symbol: symbol.toUpperCase() },
       receivedAt: new Date().toISOString(),
       cache,
+      data
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+function isoDateDaysAgo(daysAgo) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return date.toISOString().slice(0, 10);
+}
+
+app.get('/api/historical/:symbol', async (req, res) => {
+  try {
+    const market = String(req.query.market || 'BCBA');
+    const symbol = String(req.params.symbol || '').trim();
+    const days = Math.max(1, Math.min(260, Number(req.query.days || 30)));
+    const fechaDesde = String(req.query.fechaDesde || isoDateDaysAgo(Math.max(90, days * 8)));
+    const fechaHasta = String(req.query.fechaHasta || isoDateDaysAgo(1));
+    const ajustada = String(req.query.ajustada || 'sinAjustar');
+    const data = await getHistoricalQuotes({ market, symbol, fechaDesde, fechaHasta, ajustada });
+
+    res.json({
+      ok: true,
+      requested: { market, symbol: symbol.toUpperCase(), days, fechaDesde, fechaHasta, ajustada },
+      receivedAt: new Date().toISOString(),
       data
     });
   } catch (error) {

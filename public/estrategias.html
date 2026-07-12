@@ -934,6 +934,51 @@
       return expirations.length ? Math.min(...expirations) : null;
     }
 
+    function daysToNearestExpiration(options, fallbackExpiration) {
+      const expiration = nearestExpirationTime(options, fallbackExpiration);
+      if (!expiration) return 30;
+      return Math.max(1, Math.ceil((expiration - Date.now()) / 86400000));
+    }
+
+    function normalizeHistoricalItems(payload) {
+      const data = payload?.data ?? payload;
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.items)) return data.items;
+      if (Array.isArray(data?.cotizaciones)) return data.cotizaciones;
+      if (Array.isArray(data?.titulos)) return data.titulos;
+      if (Array.isArray(data?.data)) return data.data;
+      return [];
+    }
+
+    function historicalClose(item) {
+      return parseNumeric(item?.ultimoPrecio)
+        ?? parseNumeric(item?.cierre)
+        ?? parseNumeric(item?.precioCierre)
+        ?? parseNumeric(item?.close)
+        ?? parseNumeric(item?.ultimo)
+        ?? parseNumeric(item?.precio);
+    }
+
+    function historicalDate(item) {
+      return String(item?.fechaHora || item?.fecha || item?.date || item?.datetime || '');
+    }
+
+    function historicalDailyChanges(payload, days) {
+      const items = normalizeHistoricalItems(payload)
+        .map((item) => ({ date: historicalDate(item), close: historicalClose(item) }))
+        .filter((item) => item.close > 0)
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const changes = [];
+      for (let index = 1; index < items.length; index += 1) {
+        const previous = items[index - 1].close;
+        const current = items[index].close;
+        if (previous > 0 && current > 0) changes.push((current / previous) - 1);
+      }
+      if (changes.length < days) return [];
+      const start = Math.floor(Math.random() * Math.max(1, changes.length - days + 1));
+      return changes.slice(start, start + days);
+    }
+
     function getStrategyIdFromPath() {
       const parts = window.location.pathname.split('/').filter(Boolean);
       if (parts[0] === 'estrategias' && parts[1]) return parts[1];
@@ -1575,6 +1620,7 @@
             paused: false,
             completed: !active,
             manual: currentPlan.manual,
+            mode: currentPlan.mode,
             spot,
             previousSpot,
             initialSpot: currentPlan.initialSpot,
@@ -1593,51 +1639,54 @@
           }
         }
 
-        function scheduleSimulation(plan) {
-          if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
-          if (plan.manual) {
-            simulationTimerRef.current = null;
-            return;
-          }
-          simulationTimerRef.current = setInterval(() => {
-            advanceSimulationTick();
-          }, plan.intervalMs);
+        async function historicalChangesForSimulation({ underlying, days }) {
+          const response = await requestJson(`/api/historical/${encodeURIComponent(underlying || 'GGAL')}?days=${Math.max(days + 5, 40)}`);
+          return historicalDailyChanges(response, days);
         }
 
-        function startSimulation(event) {
-          const minutes = Math.max(1, Math.min(120, Number(event.detail?.minutes || 5)));
-          const intervalSeconds = Math.max(1, Math.min(3600, Number(event.detail?.intervalSeconds || 60)));
-          const manual = Boolean(event.detail?.manual);
+        async function startSimulation(event) {
+          const totalSteps = Math.max(1, Math.min(260, Number(event.detail?.days || 30)));
+          const mode = event.detail?.mode === 'historical' ? 'historical' : 'random';
           const startSpot = Number(payload?.calculation?.spot || payload?.strategy?.targetSpot || 0);
           if (!(startSpot > 0)) {
             message.error('No hay spot base para iniciar la simulacion.');
             return;
           }
           if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
-          const totalSteps = Math.max(1, Math.ceil((minutes * 60) / intervalSeconds));
           const simulationStartTime = Date.now();
-          const expiration = nearestExpirationTime(payload?.chain?.options || [], payload?.strategy?.expiration);
-          const daysToExpiration = expiration
-            ? Math.max(1, (expiration - simulationStartTime) / 86400000)
-            : 50;
-          const daysPerStep = daysToExpiration / totalSteps;
           const finalDrift = (Math.random() * 0.2) - 0.1;
+          let historicalChanges = [];
+          if (mode === 'historical') {
+            try {
+              historicalChanges = await historicalChangesForSimulation({ underlying: payload?.strategy?.underlying || 'GGAL', days: totalSteps });
+              if (historicalChanges.length < totalSteps) {
+                message.warning('No hubo suficientes datos historicos. Uso modo aleatorio.');
+              }
+            } catch (error) {
+              message.warning(`No pude cargar historico IOL. Uso modo aleatorio. ${error.message}`);
+            }
+          }
           const prices = [];
           const simulatedDates = [];
           let last = startSpot;
           for (let step = 0; step <= totalSteps; step += 1) {
-            simulatedDates.push(simulationStartTime + (daysPerStep * step * 86400000));
+            simulatedDates.push(simulationStartTime + (step * 86400000));
             if (step === 0) {
               prices.push(Number(startSpot.toFixed(2)));
               continue;
             }
-            const progress = step / totalSteps;
-            const target = startSpot * (1 + finalDrift * progress);
-            const distanceToTarget = target - last;
-            const preferredDirection = Math.random() < 0.62 ? Math.sign(distanceToTarget || finalDrift || 1) : -Math.sign(distanceToTarget || finalDrift || 1);
-            const direction = last <= startSpot * 0.92 ? 1 : last >= startSpot * 1.08 ? -1 : preferredDirection;
-            const dailyMovePercent = 0.015 + Math.random() * 0.065;
-            const next = last * (1 + direction * dailyMovePercent);
+            let next;
+            if (historicalChanges.length >= totalSteps) {
+              next = last * (1 + historicalChanges[step - 1]);
+            } else {
+              const progress = step / totalSteps;
+              const target = startSpot * (1 + finalDrift * progress);
+              const distanceToTarget = target - last;
+              const preferredDirection = Math.random() < 0.62 ? Math.sign(distanceToTarget || finalDrift || 1) : -Math.sign(distanceToTarget || finalDrift || 1);
+              const direction = last <= startSpot * 0.92 ? 1 : last >= startSpot * 1.08 ? -1 : preferredDirection;
+              const dailyMovePercent = 0.015 + Math.random() * 0.065;
+              next = last * (1 + direction * dailyMovePercent);
+            }
             last = Math.max(startSpot * 0.9, Math.min(startSpot * 1.1, next));
             prices.push(Number(last.toFixed(2)));
           }
@@ -1645,18 +1694,17 @@
             prices,
             currentStep: 0,
             totalSteps,
-            intervalMs: intervalSeconds * 1000,
             initialSpot: startSpot,
             simulatedDates,
-            manual,
+            manual: true,
+            mode: historicalChanges.length >= totalSteps ? 'historical' : 'random',
             paused: false
           };
           simulationPlanRef.current = plan;
-          const next = { active: true, paused: false, completed: false, manual, spot: prices[0], previousSpot: null, initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
+          const next = { active: true, paused: false, completed: false, manual: true, mode: plan.mode, spot: prices[0], previousSpot: null, initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
           setSimulation(next);
           emitSimulationStatus(next);
-          scheduleSimulation(plan);
-          message.success(`Simulacion iniciada por ${minutes} min. ${manual ? 'Avance manual con barra.' : `Intervalo: ${intervalSeconds}s.`} Avance: ${formatNumber(daysPerStep, 2)} dias/tick.`);
+          message.success(`Simulacion iniciada: ${totalSteps} dias, modo ${plan.mode === 'historical' ? 'historico' : 'aleatorio'}. Barra = siguiente dia.`);
         }
 
         function toggleSimulationPause() {
@@ -1673,6 +1721,7 @@
               paused: false,
               completed: false,
               manual: plan.manual,
+              mode: plan.mode,
               spot: plan.prices[plan.currentStep],
               previousSpot: plan.prices[Math.max(0, plan.currentStep - 1)] || null,
               initialSpot: plan.initialSpot,
@@ -1682,7 +1731,6 @@
             };
             setSimulation(next);
             emitSimulationStatus(next);
-            scheduleSimulation(plan);
             return;
           }
 
@@ -1694,6 +1742,7 @@
             paused: true,
             completed: false,
             manual: plan.manual,
+            mode: plan.mode,
             spot: plan.prices[plan.currentStep],
             previousSpot: plan.prices[Math.max(0, plan.currentStep - 1)] || null,
             initialSpot: plan.initialSpot,
@@ -1733,6 +1782,17 @@
       useEffect(() => {
         onSimulationEnabledChange?.(Boolean(payload?.strategy?.simulationEnabled));
       }, [payload?.strategy?.simulationEnabled, onSimulationEnabledChange]);
+
+      useEffect(() => {
+        const options = payload?.chain?.options || [];
+        if (!options.length && !payload?.strategy?.expiration) return;
+        window.dispatchEvent(new CustomEvent('sabro:simulationDefaults', {
+          detail: {
+            days: daysToNearestExpiration(options, payload?.strategy?.expiration),
+            underlying: payload?.strategy?.underlying || 'GGAL'
+          }
+        }));
+      }, [payload?.chain?.options, payload?.strategy?.expiration, payload?.strategy?.underlying]);
 
       useEffect(() => {
         const options = payload?.chain?.options || [];
@@ -2699,10 +2759,10 @@
     function App() {
       const [strategyName, setStrategyName] = useState('');
       const [simulationEnabled, setSimulationEnabled] = useState(false);
-      const [simulationMinutes, setSimulationMinutes] = useState(5);
-      const [simulationIntervalSeconds, setSimulationIntervalSeconds] = useState(60);
-      const [simulationManual, setSimulationManual] = useState(false);
-      const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, completed: false, manual: false, step: 0, totalSteps: 0, spot: null, previousSpot: null, initialSpot: null });
+      const [simulationDays, setSimulationDays] = useState(30);
+      const [simulationDaysTouched, setSimulationDaysTouched] = useState(false);
+      const [simulationMode, setSimulationMode] = useState('random');
+      const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, completed: false, manual: true, mode: 'random', step: 0, totalSteps: 0, spot: null, previousSpot: null, initialSpot: null });
       const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
 
       useEffect(() => {
@@ -2715,9 +2775,18 @@
         return () => window.removeEventListener('sabro:simulationStatus', updateStatus);
       }, []);
 
+      useEffect(() => {
+        const updateDefaults = (event) => {
+          const days = Number(event.detail?.days);
+          if (!simulationDaysTouched && days > 0) setSimulationDays(days);
+        };
+        window.addEventListener('sabro:simulationDefaults', updateDefaults);
+        return () => window.removeEventListener('sabro:simulationDefaults', updateDefaults);
+      }, [simulationDaysTouched]);
+
       function startSimulation() {
         window.dispatchEvent(new CustomEvent('sabro:startSimulation', {
-          detail: { minutes: simulationMinutes, intervalSeconds: simulationIntervalSeconds, manual: simulationManual }
+          detail: { days: simulationDays, mode: simulationMode }
         }));
       }
 
@@ -2740,30 +2809,23 @@
                     <InputNumber
                       size="small"
                       min={1}
-                      max={120}
+                      max={260}
                       step={1}
-                      value={simulationMinutes}
-                      addonAfter="min"
-                      style={{ width: 104 }}
-                      onChange={(value) => setSimulationMinutes(value || 1)}
-                    />
-                    <InputNumber
-                      size="small"
-                      min={1}
-                      max={3600}
-                      step={5}
-                      value={simulationIntervalSeconds}
-                      addonAfter="seg"
-                      style={{ width: 106 }}
-                      onChange={(value) => setSimulationIntervalSeconds(value || 1)}
+                      value={simulationDays}
+                      addonAfter="dias"
+                      style={{ width: 112 }}
+                      onChange={(value) => {
+                        setSimulationDaysTouched(true);
+                        setSimulationDays(value || 1);
+                      }}
                     />
                     <Space size={4}>
-                      <span className="muted">Manual</span>
+                      <span className="muted">Historico</span>
                       <Switch
                         size="small"
-                        checked={simulationManual}
+                        checked={simulationMode === 'historical'}
                         disabled={simulationStatus.active || simulationStatus.paused}
-                        onChange={setSimulationManual}
+                        onChange={(checked) => setSimulationMode(checked ? 'historical' : 'random')}
                       />
                     </Space>
                     <Button icon={<PlayCircleOutlined />} onClick={startSimulation} disabled={simulationStatus.active || simulationStatus.paused}>
@@ -2776,7 +2838,8 @@
                     >
                       {simulationStatus.paused ? 'Reanudar' : 'Pausar'}
                     </Button>
-                    {simulationStatus.active && simulationStatus.manual ? <Tag color="blue">Barra = siguiente tick</Tag> : null}
+                    {simulationStatus.active ? <Tag color="blue">Barra = siguiente dia</Tag> : null}
+                    {simulationStatus.active ? <Tag color={simulationStatus.mode === 'historical' ? 'purple' : 'gold'}>{simulationStatus.mode === 'historical' ? 'Historico' : 'Aleatorio'}</Tag> : null}
                     {simulationStatus.completed ? <Tag color="green">Simulacion completa</Tag> : null}
                   </>
                 ) : null}

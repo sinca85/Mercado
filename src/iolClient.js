@@ -133,6 +133,24 @@ export async function getUnderlyingOptions({ market = 'BCBA', symbol }) {
   return iolFetch(path);
 }
 
+export async function getHistoricalQuotes({ market = 'BCBA', symbol, fechaDesde, fechaHasta, ajustada = 'sinAjustar' }) {
+  if (!symbol) {
+    throw new Error('Falta symbol. Ejemplo: /api/historical/GGAL?market=BCBA');
+  }
+  if (!fechaDesde || !fechaHasta) {
+    throw new Error('Faltan fechaDesde o fechaHasta.');
+  }
+
+  const safeMarket = encodeURIComponent(market);
+  const safeSymbol = encodeURIComponent(symbol.toUpperCase());
+  const safeFechaDesde = encodeURIComponent(fechaDesde);
+  const safeFechaHasta = encodeURIComponent(fechaHasta);
+  const safeAjustada = encodeURIComponent(ajustada);
+  const path = `/api/v2/${safeMarket}/Titulos/${safeSymbol}/Cotizacion/seriehistorica/${safeFechaDesde}/${safeFechaHasta}/${safeAjustada}`;
+
+  return iolFetch(path);
+}
+
 export async function getPortfolio({ pais = 'Argentina' } = {}) {
   const safePais = encodeURIComponent(pais);
   const path = `/api/v2/portafolio/${safePais}`;
