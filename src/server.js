@@ -20,7 +20,16 @@ import {
   getUnderlyingOptions
 } from './iolClient.js';
 import { buildOptionChainResponse, calculateStrategy, normalizeOptionsPanel, numberValue } from './optionsEngine.js';
-import { createStrategy, deleteStrategy, getStrategy, listStrategies, updateStrategy } from './strategyStore.js';
+import {
+  addSimulationHistoryEntry,
+  clearSimulationHistory,
+  createStrategy,
+  deleteStrategy,
+  getStrategy,
+  listSimulationHistory,
+  listStrategies,
+  updateStrategy
+} from './strategyStore.js';
 import { getCachedMarketData, isMarketOpen, marketCacheStatus } from './marketDataCache.js';
 
 const app = express();
@@ -477,6 +486,45 @@ app.get('/api/strategies/:id', async (req, res) => {
     }
     const data = await buildStrategyPayload(strategy, { forceMarketData: req.query.force === '1' || req.query.force === 'true' });
 
+    res.json({
+      ok: true,
+      receivedAt: new Date().toISOString(),
+      data
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.get('/api/strategies/:id/simulation-history', async (req, res) => {
+  try {
+    const simulationHistory = await listSimulationHistory(String(req.params.id));
+    res.json({
+      ok: true,
+      receivedAt: new Date().toISOString(),
+      data: { simulationHistory }
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.post('/api/strategies/:id/simulation-history', async (req, res) => {
+  try {
+    const data = await addSimulationHistoryEntry(String(req.params.id), req.body || {});
+    res.json({
+      ok: true,
+      receivedAt: new Date().toISOString(),
+      data
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+app.delete('/api/strategies/:id/simulation-history', async (req, res) => {
+  try {
+    const data = await clearSimulationHistory(String(req.params.id));
     res.json({
       ok: true,
       receivedAt: new Date().toISOString(),

@@ -650,7 +650,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.7/babel.min.js"></script>
   <script type="text/babel">
     const { useEffect, useMemo, useRef, useState } = React;
-    const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Popconfirm, Select, Space, Spin, Switch, Table, Tag, Tooltip, message, theme } = antd;
+    const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Spin, Switch, Table, Tag, Tooltip, message, theme } = antd;
     const { PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined, SaveOutlined, SendOutlined } = icons;
 
     const UNDERLYINGS = ['GGAL', 'YPFD', 'COME', 'PAMP', 'BMA', 'ALUA', 'SUPV'];
@@ -1845,6 +1845,21 @@
             if (simulationTimerRef.current) clearInterval(simulationTimerRef.current);
             simulationTimerRef.current = null;
             simulationPlanRef.current = null;
+            if (!currentPlan.savedHistory && id) {
+              currentPlan.savedHistory = true;
+              requestJson(`/api/strategies/${id}/simulation-history`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  completedAt: new Date().toISOString(),
+                  result: currentPlan.finalResult,
+                  spot,
+                  mode: currentPlan.mode,
+                  steps: currentPlan.totalSteps
+                })
+              })
+                .then(() => window.dispatchEvent(new CustomEvent('sabro:simulationHistoryUpdated')))
+                .catch((error) => message.error(`No pude guardar historial de simulacion: ${error.message}`));
+            }
             message.success('Simulacion finalizada.');
           }
         }
@@ -1924,6 +1939,19 @@
                 close,
                 seed: `${id}-${index + 1}-${close}`
               }));
+          const finalSpot = prices[prices.length - 1];
+          const finalNow = simulatedDates[simulatedDates.length - 1];
+          const finalOptions = simulateOptionChain(payload?.chain?.options || [], finalSpot, payload?.strategy || {}, finalNow);
+          const finalCalculation = calculateLocalStrategySnapshot({
+            strategy: {
+              ...(payload?.strategy || {}),
+              legs: makeFixedLegs(payload?.strategy?.legs),
+              history: makeFixedHistory(payload?.strategy?.history)
+            },
+            options: finalOptions,
+            spot: finalSpot,
+            simulatedNow: finalNow
+          });
           const chartState = {
             strategyId: id,
             strategyName: payload?.strategy?.name || '',
@@ -1948,7 +1976,9 @@
             manual: true,
             mode: historicalChanges.length >= totalSteps ? 'historical' : 'random',
             paused: false,
-            chartState
+            chartState,
+            finalResult: finalCalculation.summary.todayResult,
+            savedHistory: false
           };
           simulationPlanRef.current = plan;
           const next = { active: true, paused: false, completed: false, manual: true, mode: plan.mode, spot: prices[0], previousSpot: null, initialSpot: startSpot, simulatedNow: simulatedDates[0], step: 0, totalSteps };
@@ -3045,6 +3075,9 @@
       const [simulationDaysTouched, setSimulationDaysTouched] = useState(false);
       const [simulationMode, setSimulationMode] = useState('historical');
       const [simulationStatus, setSimulationStatus] = useState({ active: false, paused: false, completed: false, manual: true, mode: 'historical', step: 0, totalSteps: 0, spot: null, previousSpot: null, initialSpot: null });
+      const [simulationHistoryOpen, setSimulationHistoryOpen] = useState(false);
+      const [simulationHistoryLoading, setSimulationHistoryLoading] = useState(false);
+      const [simulationHistory, setSimulationHistory] = useState([]);
       const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
       const activeStrategyId = getStrategyIdFromPath();
 
@@ -3077,6 +3110,78 @@
         window.dispatchEvent(new CustomEvent('sabro:toggleSimulationPause'));
       }
 
+      async function loadSimulationHistory() {
+        if (!activeStrategyId) return;
+        setSimulationHistoryLoading(true);
+        try {
+          const data = await requestJson(`/api/strategies/${activeStrategyId}/simulation-history`);
+          setSimulationHistory(data.simulationHistory || []);
+        } catch (error) {
+          message.error(error.message);
+        } finally {
+          setSimulationHistoryLoading(false);
+        }
+      }
+
+      function openSimulationHistory() {
+        setSimulationHistoryOpen(true);
+        loadSimulationHistory();
+      }
+
+      async function clearSimulationHistory() {
+        if (!activeStrategyId) return;
+        setSimulationHistoryLoading(true);
+        try {
+          const data = await requestJson(`/api/strategies/${activeStrategyId}/simulation-history`, { method: 'DELETE' });
+          setSimulationHistory(data.simulationHistory || []);
+          message.success('Historial de simulaciones limpio.');
+        } catch (error) {
+          message.error(error.message);
+        } finally {
+          setSimulationHistoryLoading(false);
+        }
+      }
+
+      useEffect(() => {
+        if (!simulationHistoryOpen) return undefined;
+        const refresh = () => loadSimulationHistory();
+        window.addEventListener('sabro:simulationHistoryUpdated', refresh);
+        return () => window.removeEventListener('sabro:simulationHistoryUpdated', refresh);
+      }, [simulationHistoryOpen, activeStrategyId]);
+
+      const simulationHistoryTotal = simulationHistory.reduce((sum, row) => sum + Number(row.result || 0), 0);
+      const simulationHistoryColumns = [
+        {
+          title: 'Fecha',
+          dataIndex: 'completedAt',
+          render: (value) => value ? dayjs(value).format('DD/MM/YYYY HH:mm') : '-'
+        },
+        {
+          title: 'Modo',
+          dataIndex: 'mode',
+          width: 90,
+          render: (value) => value === 'historical' ? 'Historico' : value === 'random' ? 'Aleatorio' : '-'
+        },
+        {
+          title: 'Dias',
+          dataIndex: 'steps',
+          width: 70,
+          render: (value) => value ?? '-'
+        },
+        {
+          title: 'Spot final',
+          dataIndex: 'spot',
+          width: 110,
+          render: (value) => value === null || value === undefined ? '-' : formatNumber(value, 2)
+        },
+        {
+          title: 'Resultado',
+          dataIndex: 'result',
+          width: 130,
+          render: (value) => <span className={Number(value) >= 0 ? 'positive' : 'negative'}>{formatMoney(value)}</span>
+        }
+      ];
+
       return (
         <ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: { colorPrimary: '#2f93ff', borderRadius: 6 } }}>
           <main className="page">
@@ -3094,6 +3199,9 @@
                       disabled={!activeStrategyId}
                     >
                       Ver grafico
+                    </Button>
+                    <Button onClick={openSimulationHistory} disabled={!activeStrategyId}>
+                      Historial simulacion
                     </Button>
                     <InputNumber
                       size="small"
@@ -3142,6 +3250,41 @@
                 onSimulationEnabledChange={setSimulationEnabled}
               />
             </div>
+            <Modal
+              title="Historial de simulaciones"
+              open={simulationHistoryOpen}
+              onCancel={() => setSimulationHistoryOpen(false)}
+              footer={[
+                <Popconfirm
+                  key="clear"
+                  title="Limpiar historial"
+                  description="Borra todas las simulaciones guardadas para esta planilla."
+                  okText="Limpiar"
+                  cancelText="Cancelar"
+                  onConfirm={clearSimulationHistory}
+                >
+                  <Button danger>Limpiar historial</Button>
+                </Popconfirm>,
+                <Button key="close" type="primary" onClick={() => setSimulationHistoryOpen(false)}>Cerrar</Button>
+              ]}
+              width={760}
+            >
+              <div style={{ marginBottom: 12 }}>
+                <span className="muted">Total acumulado: </span>
+                <span className={simulationHistoryTotal >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 900 }}>
+                  {formatMoney(simulationHistoryTotal)}
+                </span>
+              </div>
+              <Table
+                size="small"
+                rowKey={(row) => row.id}
+                loading={simulationHistoryLoading}
+                columns={simulationHistoryColumns}
+                dataSource={simulationHistory}
+                pagination={{ pageSize: 10, size: 'small' }}
+                locale={{ emptyText: 'Todavia no hay simulaciones guardadas.' }}
+              />
+            </Modal>
           </main>
         </ConfigProvider>
       );

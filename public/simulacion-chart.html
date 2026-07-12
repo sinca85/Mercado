@@ -85,75 +85,6 @@
       background: var(--panel);
     }
 
-    .drawing-toolbar {
-      position: absolute;
-      z-index: 4;
-      top: 22px;
-      left: 22px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(16, 24, 36, 0.94);
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
-    }
-
-    .tool-button {
-      height: 28px;
-      min-width: 30px;
-      padding: 0 9px;
-      border: 1px solid #34445d;
-      border-radius: 6px;
-      background: #172131;
-      color: var(--text);
-      font-size: 12px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .tool-button:hover,
-    .tool-button.active {
-      border-color: var(--blue);
-      background: #20385a;
-      color: #fff;
-    }
-
-    .tool-button.danger:hover {
-      border-color: var(--red);
-      background: rgba(255, 77, 79, 0.18);
-    }
-
-    .drawing-layer {
-      position: absolute;
-      z-index: 3;
-      inset: 13px;
-      width: auto;
-      height: auto;
-      border-radius: 8px;
-      pointer-events: none;
-    }
-
-    .drawing-layer.drawing-enabled {
-      cursor: crosshair;
-      pointer-events: auto;
-      background: rgba(0, 0, 0, 0);
-    }
-
-    .drawn-line {
-      stroke: #f2dd22;
-      stroke-width: 2.2;
-      stroke-linecap: round;
-      vector-effect: non-scaling-stroke;
-      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
-    }
-
-    .drawn-line.preview {
-      stroke: var(--blue);
-      stroke-dasharray: 6 5;
-    }
-
     .empty {
       position: fixed;
       inset: 58px 0 0;
@@ -181,15 +112,7 @@
     </div>
   </header>
   <main class="chart-wrap">
-    <div class="drawing-toolbar" aria-label="Herramientas de dibujo">
-      <button class="tool-button active" data-tool="cursor" title="Cursor">Cursor</button>
-      <button class="tool-button" data-tool="trend" title="Linea de dos puntos">Linea</button>
-      <button class="tool-button" data-tool="horizontal" title="Linea horizontal">H</button>
-      <button class="tool-button" id="undoDrawing" title="Deshacer">Undo</button>
-      <button class="tool-button danger" id="clearDrawings" title="Borrar dibujos">Borrar</button>
-    </div>
     <div id="chart"></div>
-    <svg id="drawingLayer" class="drawing-layer"></svg>
   </main>
   <div id="empty" class="empty">Inicia una simulacion desde la planilla para ver el grafico sincronizado.</div>
 
@@ -197,18 +120,12 @@
     const strategyId = decodeURIComponent(location.pathname.split('/').filter(Boolean)[1] || 'current');
     const storageKey = `sabro:simulation-chart:${strategyId}`;
     const chartEl = document.getElementById('chart');
-    const drawingLayer = document.getElementById('drawingLayer');
     const emptyEl = document.getElementById('empty');
     const titleEl = document.getElementById('title');
     const subtitleEl = document.getElementById('subtitle');
     const modeEl = document.getElementById('mode');
     const stepEl = document.getElementById('step');
     const lastEl = document.getElementById('last');
-    const drawingsKey = `sabro:simulation-chart-drawings:${strategyId}`;
-    let drawingTool = 'cursor';
-    let drawings = readDrawings();
-    let drawingStart = null;
-    let previewLine = null;
     let didFitInitialContent = false;
 
     const chart = LightweightCharts.createChart(chartEl, {
@@ -252,181 +169,6 @@
       return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(Number(value || 0));
     }
 
-    function readDrawings() {
-      try {
-        const raw = localStorage.getItem(drawingsKey);
-        const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed.filter((drawing) => drawing?.p1 && drawing?.p2) : [];
-      } catch (_error) {
-        return [];
-      }
-    }
-
-    function saveDrawings() {
-      try {
-        localStorage.setItem(drawingsKey, JSON.stringify(drawings));
-      } catch (_error) {}
-    }
-
-    function syncDrawingLayerSize() {
-      const rect = chartEl.getBoundingClientRect();
-      const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
-      drawingLayer.style.left = `${Math.round(rect.left - chartEl.parentElement.getBoundingClientRect().left)}px`;
-      drawingLayer.style.top = `${Math.round(rect.top - chartEl.parentElement.getBoundingClientRect().top)}px`;
-      drawingLayer.style.right = 'auto';
-      drawingLayer.style.bottom = 'auto';
-      drawingLayer.style.width = `${width}px`;
-      drawingLayer.style.height = `${height}px`;
-      drawingLayer.setAttribute('width', width);
-      drawingLayer.setAttribute('height', height);
-      drawingLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    }
-
-    function pointFromEvent(event) {
-      const rect = drawingLayer.getBoundingClientRect();
-      return {
-        x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
-        y: Math.max(0, Math.min(rect.height, event.clientY - rect.top))
-      };
-    }
-
-    function chartPointFromEvent(event) {
-      const point = pointFromEvent(event);
-      const time = chart.timeScale().coordinateToTime(point.x);
-      const price = series.coordinateToPrice(point.y);
-      if (time === null || time === undefined || !(price > 0)) return null;
-      return { ...point, time, price };
-    }
-
-    function lineElement(line, extraClass = '') {
-      const element = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      element.setAttribute('x1', line.x1);
-      element.setAttribute('y1', line.y1);
-      element.setAttribute('x2', line.x2);
-      element.setAttribute('y2', line.y2);
-      element.setAttribute('class', `drawn-line ${extraClass}`.trim());
-      return element;
-    }
-
-    function drawingToScreenLine(drawing) {
-      const x1 = chart.timeScale().timeToCoordinate(drawing.p1.time);
-      const x2 = chart.timeScale().timeToCoordinate(drawing.p2.time);
-      const y1 = series.priceToCoordinate(drawing.p1.price);
-      const y2 = series.priceToCoordinate(drawing.p2.price);
-      if ([x1, x2, y1, y2].some((value) => value === null || value === undefined || !Number.isFinite(Number(value)))) {
-        return null;
-      }
-      return { x1, y1, x2, y2 };
-    }
-
-    function makeLineFromPoints(start, end) {
-      const endPoint = drawingTool === 'horizontal'
-        ? { ...end, price: start.price, y: start.y }
-        : end;
-      return {
-        type: drawingTool,
-        p1: { time: start.time, price: Number(start.price.toFixed(4)) },
-        p2: { time: endPoint.time, price: Number(endPoint.price.toFixed(4)) }
-      };
-    }
-
-    function previewLineFromPoints(start, end) {
-      return {
-        x1: Number(start.x.toFixed(1)),
-        y1: Number(start.y.toFixed(1)),
-        x2: Number(end.x.toFixed(1)),
-        y2: Number((drawingTool === 'horizontal' ? start.y : end.y).toFixed(1))
-      };
-    }
-
-    function clearPreviewLine() {
-      if (previewLine) previewLine.remove();
-      previewLine = null;
-      drawingStart = null;
-    }
-
-    function renderDrawings() {
-      drawingLayer.innerHTML = '';
-      const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      hitArea.setAttribute('x', 0);
-      hitArea.setAttribute('y', 0);
-      hitArea.setAttribute('width', '100%');
-      hitArea.setAttribute('height', '100%');
-      hitArea.setAttribute('fill', 'transparent');
-      hitArea.setAttribute('pointer-events', 'all');
-      drawingLayer.appendChild(hitArea);
-      for (const drawing of drawings) {
-        const screenLine = drawingToScreenLine(drawing);
-        if (screenLine) drawingLayer.appendChild(lineElement(screenLine));
-      }
-    }
-
-    function setDrawingTool(tool) {
-      clearPreviewLine();
-      drawingTool = tool;
-      drawingLayer.classList.toggle('drawing-enabled', drawingTool !== 'cursor');
-      document.querySelectorAll('[data-tool]').forEach((button) => {
-        button.classList.toggle('active', button.dataset.tool === tool);
-      });
-    }
-
-    document.querySelectorAll('[data-tool]').forEach((button) => {
-      button.addEventListener('click', () => setDrawingTool(button.dataset.tool));
-    });
-
-    document.getElementById('undoDrawing').addEventListener('click', () => {
-      drawings.pop();
-      saveDrawings();
-      renderDrawings();
-    });
-
-    document.getElementById('clearDrawings').addEventListener('click', () => {
-      drawings = [];
-      saveDrawings();
-      renderDrawings();
-    });
-
-    drawingLayer.addEventListener('pointerdown', (event) => {
-      if (drawingTool === 'cursor') return;
-      event.preventDefault();
-      const point = chartPointFromEvent(event);
-      if (!point) return;
-      if (!drawingStart) {
-        drawingStart = point;
-        previewLine = lineElement(previewLineFromPoints(drawingStart, point), 'preview');
-        drawingLayer.appendChild(previewLine);
-        return;
-      }
-
-      const line = makeLineFromPoints(drawingStart, point);
-      const screenLine = drawingToScreenLine(line);
-      clearPreviewLine();
-      if (screenLine && (Math.abs(screenLine.x2 - screenLine.x1) > 4 || Math.abs(screenLine.y2 - screenLine.y1) > 4)) {
-        drawings.push(line);
-        saveDrawings();
-        renderDrawings();
-      }
-      setDrawingTool('cursor');
-    });
-
-    drawingLayer.addEventListener('pointermove', (event) => {
-      if (!drawingStart || !previewLine) return;
-      event.preventDefault();
-      const point = pointFromEvent(event);
-      const endY = drawingTool === 'horizontal' ? drawingStart.y : point.y;
-      previewLine.setAttribute('x2', point.x);
-      previewLine.setAttribute('y2', endY);
-    });
-
-    drawingLayer.addEventListener('pointerup', (event) => {
-      if (drawingTool !== 'cursor') event.preventDefault();
-    });
-
-    drawingLayer.addEventListener('pointercancel', () => {
-      clearPreviewLine();
-    });
-
     function barsForState(state) {
       const historicalBars = Array.isArray(state?.historicalBars) ? state.historicalBars : [];
       const simulationBars = Array.isArray(state?.simulationBars) ? state.simulationBars : [];
@@ -459,7 +201,6 @@
         chart.timeScale().fitContent();
         didFitInitialContent = true;
       }
-      requestAnimationFrame(renderDrawings);
     }
 
     function readStoredState() {
@@ -472,22 +213,6 @@
     }
 
     render(readStoredState());
-    syncDrawingLayerSize();
-    renderDrawings();
-    chart.timeScale().subscribeVisibleLogicalRangeChange(() => renderDrawings());
-    chart.subscribeCrosshairMove(() => {
-      if (!drawingStart) renderDrawings();
-    });
-    ['wheel', 'pointerup', 'mouseup'].forEach((eventName) => {
-      chartEl.addEventListener(eventName, () => {
-        requestAnimationFrame(renderDrawings);
-        setTimeout(renderDrawings, 80);
-      }, { passive: true });
-    });
-    new ResizeObserver(() => {
-      syncDrawingLayerSize();
-      renderDrawings();
-    }).observe(chartEl);
 
     if ('BroadcastChannel' in window) {
       const channel = new BroadcastChannel('sabro-simulation-chart');

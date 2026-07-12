@@ -163,8 +163,24 @@ function normalizeStrategy(input = {}) {
     useAutoIv: Boolean(input.useAutoIv),
     simulationEnabled: Boolean(input.simulationEnabled),
     legs: normalizeLegs(input.legs),
-    history: normalizeHistory(input.history)
+    history: normalizeHistory(input.history),
+    simulationHistory: normalizeSimulationHistory(input.simulationHistory)
   };
+}
+
+function normalizeSimulationHistory(inputHistory) {
+  const rows = Array.isArray(inputHistory) ? inputHistory : [];
+  return rows
+    .map((row) => ({
+      id: row.id || makeId(),
+      completedAt: row.completedAt || row.date || new Date().toISOString(),
+      result: Number(row.result ?? row.todayResult ?? 0),
+      spot: row.spot === null || row.spot === undefined ? null : Number(row.spot),
+      mode: row.mode || null,
+      steps: row.steps === null || row.steps === undefined ? null : Number(row.steps)
+    }))
+    .filter((row) => Number.isFinite(row.result))
+    .slice(-500);
 }
 
 export async function createStrategy(input = {}) {
@@ -320,4 +336,72 @@ export async function updateStrategy(id, input = {}) {
   store.strategies[id] = strategy;
   await writeStore(store);
   return strategy;
+}
+
+export async function listSimulationHistory(id) {
+  const strategy = await getStrategy(id);
+  if (!strategy) {
+    const error = new Error(`No existe estrategia ${id}.`);
+    error.status = 404;
+    throw error;
+  }
+  return strategy.simulationHistory || [];
+}
+
+export async function addSimulationHistoryEntry(id, input = {}) {
+  const collection = await strategiesCollection();
+  const entry = normalizeSimulationHistory([{ ...input, id: makeId(), completedAt: input.completedAt || new Date().toISOString() }])[0];
+  if (!entry) {
+    const error = new Error('Resultado de simulacion invalido.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (collection) {
+    const existing = await collection.findOne({ id }, { projection: { _id: 0, simulationHistory: 1 } });
+    if (!existing) {
+      const error = new Error(`No existe estrategia ${id}.`);
+      error.status = 404;
+      throw error;
+    }
+    const simulationHistory = normalizeSimulationHistory([...(existing.simulationHistory || []), entry]);
+    await collection.updateOne({ id }, { $set: { simulationHistory, updatedAt: new Date().toISOString() } });
+    return { entry, simulationHistory };
+  }
+
+  const store = await readStore();
+  const existing = store.strategies[id];
+  if (!existing) {
+    const error = new Error(`No existe estrategia ${id}.`);
+    error.status = 404;
+    throw error;
+  }
+  const simulationHistory = normalizeSimulationHistory([...(existing.simulationHistory || []), entry]);
+  store.strategies[id] = { ...existing, simulationHistory, updatedAt: new Date().toISOString() };
+  await writeStore(store);
+  return { entry, simulationHistory };
+}
+
+export async function clearSimulationHistory(id) {
+  const collection = await strategiesCollection();
+  if (collection) {
+    const result = await collection.updateOne({ id }, { $set: { simulationHistory: [], updatedAt: new Date().toISOString() } });
+    if (!result.matchedCount) {
+      const error = new Error(`No existe estrategia ${id}.`);
+      error.status = 404;
+      throw error;
+    }
+    return { simulationHistory: [] };
+  }
+
+  const store = await readStore();
+  const existing = store.strategies[id];
+  if (!existing) {
+    const error = new Error(`No existe estrategia ${id}.`);
+    error.status = 404;
+    throw error;
+  }
+  store.strategies[id] = { ...existing, simulationHistory: [], updatedAt: new Date().toISOString() };
+  await writeStore(store);
+  return { simulationHistory: [] };
 }
