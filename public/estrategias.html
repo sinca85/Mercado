@@ -913,10 +913,48 @@
     }
 
     function yearsToExpiration(expiration, fromDate = Date.now()) {
-      if (!expiration) return 50 / 365;
-      const expiry = new Date(`${expiration}T21:00:00.000Z`);
-      const fromTime = fromDate instanceof Date ? fromDate.getTime() : Number(fromDate);
-      return Math.max(1, Math.ceil((expiry.getTime() - fromTime) / 86400000)) / 365;
+      if (!expiration) return 50 / 252;
+      return Math.max(1, businessDaysToExpiration(expiration, fromDate)) / 252;
+    }
+
+    function startOfLocalDay(value = Date.now()) {
+      const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+      date.setHours(0, 0, 0, 0);
+      return date;
+    }
+
+    function expirationLocalDay(value) {
+      if (!value) return null;
+      const parts = String(value).slice(0, 10).split('-').map(Number);
+      if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
+      return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+    }
+
+    function isBusinessDay(date) {
+      const day = date.getDay();
+      return day !== 0 && day !== 6;
+    }
+
+    function businessDaysToExpiration(expiration, fromDate = Date.now()) {
+      const expiry = expirationLocalDay(expiration);
+      if (!expiry) return 50;
+      const cursor = startOfLocalDay(fromDate);
+      let days = 0;
+      while (cursor < expiry) {
+        cursor.setDate(cursor.getDate() + 1);
+        if (isBusinessDay(cursor)) days += 1;
+      }
+      return Math.max(1, days);
+    }
+
+    function addBusinessDays(fromDate, days) {
+      const date = startOfLocalDay(fromDate);
+      let remaining = Math.max(0, Number(days) || 0);
+      while (remaining > 0) {
+        date.setDate(date.getDate() + 1);
+        if (isBusinessDay(date)) remaining -= 1;
+      }
+      return date.getTime();
     }
 
     function expirationTime(value) {
@@ -937,7 +975,7 @@
     function daysToNearestExpiration(options, fallbackExpiration) {
       const expiration = nearestExpirationTime(options, fallbackExpiration);
       if (!expiration) return 30;
-      return Math.max(1, Math.ceil((expiration - Date.now()) / 86400000));
+      return businessDaysToExpiration(new Date(expiration).toISOString().slice(0, 10));
     }
 
     function normalizeHistoricalItems(payload) {
@@ -1701,7 +1739,7 @@
           const simulatedDates = [];
           let last = startSpot;
           for (let step = 0; step <= totalSteps; step += 1) {
-            simulatedDates.push(simulationStartTime + (step * 86400000));
+            simulatedDates.push(addBusinessDays(simulationStartTime, step));
             if (step === 0) {
               prices.push(Number(startSpot.toFixed(2)));
               continue;
@@ -1885,7 +1923,8 @@
       const fixedHistory = makeFixedHistory(strategy.history);
       const simulationSpot = simulation.spot || null;
       const simulatedNow = simulation.simulatedNow || Date.now();
-      const chainOptions = simulationSpot
+      const shouldSimulateChain = simulationSpot && Number(simulation.step || 0) > 0;
+      const chainOptions = shouldSimulateChain
         ? simulateOptionChain(rawChainOptions, simulationSpot, strategy, simulatedNow)
         : rawChainOptions;
       const calculation = simulationSpot
