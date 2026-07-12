@@ -129,6 +129,8 @@
       position: absolute;
       z-index: 3;
       inset: 13px;
+      width: auto;
+      height: auto;
       border-radius: 8px;
       pointer-events: none;
     }
@@ -267,10 +269,18 @@
     }
 
     function syncDrawingLayerSize() {
-      const rect = drawingLayer.getBoundingClientRect();
-      drawingLayer.setAttribute('width', Math.max(1, Math.round(rect.width)));
-      drawingLayer.setAttribute('height', Math.max(1, Math.round(rect.height)));
-      drawingLayer.setAttribute('viewBox', `0 0 ${Math.max(1, Math.round(rect.width))} ${Math.max(1, Math.round(rect.height))}`);
+      const rect = chartEl.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      drawingLayer.style.left = `${Math.round(rect.left - chartEl.parentElement.getBoundingClientRect().left)}px`;
+      drawingLayer.style.top = `${Math.round(rect.top - chartEl.parentElement.getBoundingClientRect().top)}px`;
+      drawingLayer.style.right = 'auto';
+      drawingLayer.style.bottom = 'auto';
+      drawingLayer.style.width = `${width}px`;
+      drawingLayer.style.height = `${height}px`;
+      drawingLayer.setAttribute('width', width);
+      drawingLayer.setAttribute('height', height);
+      drawingLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
     }
 
     function pointFromEvent(event) {
@@ -433,7 +443,7 @@
     new ResizeObserver(() => {
       syncDrawingLayerSize();
       renderDrawings();
-    }).observe(drawingLayer);
+    }).observe(chartEl);
 
     if ('BroadcastChannel' in window) {
       const channel = new BroadcastChannel('sabro-simulation-chart');
