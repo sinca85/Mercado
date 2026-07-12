@@ -1288,9 +1288,9 @@
         .filter((cells) => cells.some(Boolean));
     }
 
-    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest, targetHighlights = {}, numericColumns = {} }) {
+    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest, targetHighlights = {} }) {
       const columns = [
-        { key: 'quantity', title: 'CANT', editable: true, inputType: numericColumns.quantity ? 'number' : 'text', step: numericColumns.quantity?.step || 1 },
+        { key: 'quantity', title: 'CANT', editable: true },
         { key: 'symbol', title: 'BASE', editable: true },
         ...extraColumnsAfterSymbol.map((column) => ({ ...column, editable: false })),
         { key: 'premium', title: premiumTitle, editable: true },
@@ -1602,8 +1602,6 @@
                               <input
                                 ref={editInputRef}
                                 className={column.key === 'symbol' ? 'symbol-input' : ''}
-                                type={column.inputType || 'text'}
-                                step={column.inputType === 'number' ? column.step : undefined}
                                 value={row[column.key] ?? ''}
                                 list={column.key === 'symbol' ? `${gridIdRef.current}-${type}` : undefined}
                                 onChange={(event) => changeCell(rowIndex, column.key, event.target.value)}
@@ -3020,7 +3018,6 @@
                 onUpdate={updateStrategyLegRow}
                 focusRequest={strategyGridFocus}
                 targetHighlights={bestTargetHighlights}
-                numericColumns={{ quantity: { step: 1 } }}
               />
             </section>
 
