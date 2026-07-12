@@ -963,10 +963,21 @@
       return String(item?.fechaHora || item?.fecha || item?.date || item?.datetime || '');
     }
 
+    function historicalDateKey(item) {
+      const raw = historicalDate(item);
+      return raw ? raw.slice(0, 10) : '';
+    }
+
     function historicalDailyChanges(payload, days) {
-      const items = normalizeHistoricalItems(payload)
-        .map((item) => ({ date: historicalDate(item), close: historicalClose(item) }))
-        .filter((item) => item.close > 0)
+      const closeByDate = new Map();
+      for (const item of normalizeHistoricalItems(payload)) {
+        const date = historicalDateKey(item);
+        const close = historicalClose(item);
+        if (!date || !(close > 0)) continue;
+        closeByDate.set(date, close);
+      }
+      const items = Array.from(closeByDate.entries())
+        .map(([date, close]) => ({ date, close }))
         .sort((a, b) => a.date.localeCompare(b.date));
       const changes = [];
       for (let index = 1; index < items.length; index += 1) {
@@ -1640,7 +1651,7 @@
         }
 
         async function historicalChangesForSimulation({ underlying, days }) {
-          const response = await requestJson(`/api/historical/${encodeURIComponent(underlying || 'GGAL')}?days=${Math.max(days + 5, 40)}`);
+          const response = await requestJson(`/api/historical/${encodeURIComponent(underlying || 'GGAL')}?days=${Math.max(days * 4, 120)}`);
           return historicalDailyChanges(response, days);
         }
 
