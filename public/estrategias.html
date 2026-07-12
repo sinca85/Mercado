@@ -316,6 +316,14 @@
       text-align: left;
     }
 
+    .input-grid .target-roi-positive {
+      color: #087a28;
+    }
+
+    .input-grid .target-roi-negative {
+      color: #c60000;
+    }
+
     .input-grid .edit-cell.editing.symbol-cell {
       z-index: 20;
       overflow: visible;
@@ -2454,13 +2462,13 @@
         applyStrategyChange({ ...strategy, legs });
       }
 
-      function targetPremiumForLeg(leg) {
+      function targetPremiumValueForLeg(leg) {
         const targetSpot = Number(strategy.targetSpot);
-        if (!(targetSpot > 0) || !leg.symbol) return '';
+        if (!(targetSpot > 0) || !leg.symbol) return null;
         const result = leg.result;
         const contract = contractForLeg(leg);
         const strike = Number(result?.strike || contract?.strike);
-        if (!(strike > 0)) return '';
+        if (!(strike > 0)) return null;
         const autoIv = autoIvForLeg(leg);
         const volatility = strategy.useAutoIv && autoIv
           ? autoIv
@@ -2473,7 +2481,26 @@
           volatility,
           rate: Number(strategy.riskFreeRate || 0.125)
         });
+        return Number.isFinite(price) ? price : null;
+      }
+
+      function targetPremiumForLeg(leg) {
+        const price = targetPremiumValueForLeg(leg);
         return Number.isFinite(price) ? formatNumber(price, 3) : '';
+      }
+
+      function targetRoiForLeg(leg, targetPremiumValue) {
+        const currentPremium = currentPremiumForLeg(leg);
+        if (!(currentPremium > 0) || !Number.isFinite(targetPremiumValue)) return null;
+        return ((targetPremiumValue - currentPremium) / currentPremium) * 100;
+      }
+
+      function TargetRoiValue({ value }) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return <span>—</span>;
+        const className = numeric >= 0 ? 'target-roi-positive' : 'target-roi-negative';
+        const sign = numeric > 0 ? '+' : '';
+        return <span className={className}>{sign}{formatNumber(numeric, 2)}%</span>;
       }
 
       function contractForLeg(leg) {
@@ -2508,11 +2535,14 @@
 
       const strategyRowsWithTarget = legsWithResults.map((leg) => {
         const autoIv = autoIvForLeg(leg);
+        const targetPremiumValue = targetPremiumValueForLeg(leg);
         return {
           ...leg,
           premium: displayPremiumForLeg(leg),
           autoIv: autoIv ? formatPercent(autoIv) : '',
-          targetPremium: targetPremiumForLeg(leg)
+          targetPremium: Number.isFinite(targetPremiumValue) ? formatNumber(targetPremiumValue, 3) : '',
+          targetPremiumValue,
+          targetRoi: targetRoiForLeg(leg, targetPremiumValue)
         };
       });
 
@@ -3001,6 +3031,11 @@
                 extraColumnsAfterSymbol={[{ key: 'autoIv', title: 'VI AUTO' }]}
                 extraColumns={[
                   { key: 'targetPremium', title: 'PRIMA TARGET' },
+                  {
+                    key: 'targetRoi',
+                    title: 'ROI AL TARGET',
+                    render: (value) => <TargetRoiValue value={value} />
+                  },
                   {
                     key: 'actions',
                     title: 'ACCIONES',
