@@ -659,7 +659,7 @@
   <script type="text/babel">
     const { useEffect, useMemo, useRef, useState } = React;
     const { Button, ConfigProvider, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Spin, Switch, Table, Tag, Tooltip, message, theme } = antd;
-    const { PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined, SaveOutlined, SendOutlined } = icons;
+    const { PauseCircleOutlined, PlayCircleOutlined, ReloadOutlined, SaveOutlined, SendOutlined, UploadOutlined } = icons;
 
     const UNDERLYINGS = ['GGAL', 'YPFD', 'COME', 'PAMP', 'BMA', 'ALUA', 'SUPV'];
     const DEFAULT_STRATEGY_ROWS_PER_SIDE = 10;
@@ -694,6 +694,45 @@
       else if (hasDot && raw.split('.').length > 2) normalized = raw.replace(/\./g, '');
       const numeric = Number(normalized);
       return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    function splitDelimitedLine(line, separator = ',') {
+      const cells = [];
+      let current = '';
+      let inQuotes = false;
+      const text = String(line || '');
+      for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        const nextChar = text[index + 1];
+        if (char === '"' && inQuotes && nextChar === '"') {
+          current += '"';
+          index += 1;
+        } else if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === separator && !inQuotes) {
+          cells.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      cells.push(current.trim());
+      return cells;
+    }
+
+    function parseDelimitedTable(text) {
+      const lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
+      if (!lines.length) return [];
+      const firstLine = lines[0];
+      const separator = firstLine.includes('\t') ? '\t' : firstLine.includes(';') ? ';' : ',';
+      const headers = splitDelimitedLine(firstLine, separator).map((header) => String(header || '').trim());
+      return lines.slice(1).map((line) => {
+        const cells = splitDelimitedLine(line, separator);
+        return headers.reduce((row, header, index) => {
+          row[header] = cells[index] ?? '';
+          return row;
+        }, {});
+      });
     }
 
     function formatMoney(value) {
@@ -1256,7 +1295,8 @@
           symbol: row.symbol || '',
           premium: row.premium ?? '',
           manualPrice: row.manualPrice ?? '',
-          realized: row.realized ?? 0
+          realized: row.realized ?? 0,
+          importIds: Array.isArray(row.importIds) ? row.importIds.map(String) : []
         };
       });
       return [...makeRows('CALL', calls), ...makeRows('PUT', puts)];
@@ -1311,12 +1351,12 @@
         .filter((cells) => cells.some(Boolean));
     }
 
-    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest, targetHighlights = {}, onTypeDoubleClick }) {
+    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest, targetHighlights = {}, onTypeDoubleClick, columnWidths = {} }) {
       const columns = [
-        { key: 'quantity', title: 'CANT', editable: true, width: 45 },
-        { key: 'symbol', title: 'BASE', editable: true },
+        { key: 'quantity', title: 'CANT', editable: true, width: columnWidths.quantity || 45 },
+        { key: 'symbol', title: 'BASE', editable: true, width: columnWidths.symbol },
         ...extraColumnsAfterSymbol.map((column) => ({ ...column, editable: false })),
-        { key: 'premium', title: premiumTitle, editable: true, width: 86 },
+        { key: 'premium', title: premiumTitle, editable: true, width: columnWidths.premium || 86 },
         ...extraColumns.map((column) => ({ ...column, editable: false }))
       ];
       const [selection, setSelection] = useState({ start: { row: 0, col: 0 }, end: { row: 0, col: 0 } });
@@ -1812,6 +1852,7 @@
       const simulationPlanRef = useRef(null);
       const payloadRef = useRef(null);
       const idRef = useRef(initialId);
+      const historyCsvInputRef = useRef(null);
 
       useEffect(() => {
         payloadRef.current = payload;
@@ -2271,7 +2312,8 @@
           symbol: '',
           premium: '',
           manualPrice: '',
-          realized: 0
+          realized: 0,
+          importIds: []
         }));
         strategy.history = history;
         applyStrategyChange({ ...strategy, history });
@@ -2309,7 +2351,10 @@
           quantity: nextQuantity === 0 ? 0 : Number(nextQuantity.toFixed(6)),
           symbol: trade.symbol,
           premium: Number(nextPremium.toFixed(3)),
-          realized: Number(nextRealized.toFixed(2))
+          realized: Number(nextRealized.toFixed(2)),
+          importIds: trade.importId
+            ? Array.from(new Set([...(existingRow.importIds || []).map(String), String(trade.importId)]))
+            : (existingRow.importIds || [])
         };
       }
 
@@ -2417,6 +2462,114 @@
 
         applyStrategyChange({ ...strategy, history: [...calls, ...puts] });
         message.success(`Pegado en historial ${targetType}.`);
+      }
+
+      function extractMatrizOptionSymbol(row) {
+        const values = [
+          row.security_id,
+          row.symbol,
+          row.instrumento,
+          row.especie
+        ].filter(Boolean).map((value) => String(value).toUpperCase());
+        for (const value of values) {
+          const compact = value.replace(/\s/g, '');
+          const match = compact.match(/([A-Z]{2,6}[CV]\d{3,6}[A-Z]{1,3})/);
+          if (match) return match[1];
+        }
+        return '';
+      }
+
+      function optionTypeFromSymbol(symbol) {
+        const match = String(symbol || '').toUpperCase().match(/^[A-Z]{2,6}([CV])\d/);
+        if (!match) return null;
+        return match[1] === 'C' ? 'CALL' : 'PUT';
+      }
+
+      function matrizTradeFromRow(row) {
+        const symbol = extractMatrizOptionSymbol(row);
+        const type = optionTypeFromSymbol(symbol);
+        if (!symbol || !type) return null;
+        const status = String(row.ord_status || row.estado || '').toLowerCase();
+        const execType = String(row.exec_type || '').toUpperCase();
+        if (status && !status.includes('ejecut')) return null;
+        if (execType && execType !== 'F') return null;
+        const side = String(row.side || row.compra_venta || row.operacion || '').toUpperCase();
+        const sideSign = side.includes('BUY') || side.includes('COMPRA') ? 1 : side.includes('SELL') || side.includes('VENTA') ? -1 : 0;
+        const quantity = parseNumeric(row.last_qty) ?? parseNumeric(row.cum_qty) ?? parseNumeric(row.order_size);
+        const premium = parseNumeric(row.avg_price) ?? parseNumeric(row.last_price) ?? parseNumeric(row.order_price);
+        if (!sideSign || !(quantity > 0) || !(premium > 0)) return null;
+        return {
+          importId: String(row.id || row.order_id || `${symbol}-${side}-${quantity}-${premium}-${row.transact_time || ''}`),
+          type,
+          symbol,
+          quantity: sideSign * quantity,
+          premium,
+          date: row.transact_time || ''
+        };
+      }
+
+      function importMatrizTrades(trades) {
+        const history = makeFixedHistory(strategy.history);
+        const importedIds = new Set(history.flatMap((row) => (row.importIds || []).map(String)));
+        const calls = history.filter((item) => item.type === 'CALL');
+        const puts = history.filter((item) => item.type === 'PUT');
+        let importedCount = 0;
+        let skippedCount = 0;
+
+        for (const trade of trades) {
+          if (!trade?.importId || importedIds.has(String(trade.importId))) {
+            skippedCount += 1;
+            continue;
+          }
+          const targetRows = trade.type === 'CALL' ? calls : puts;
+          let targetIndex = targetRows.findIndex((item) => String(item.symbol || '').toUpperCase() === trade.symbol);
+          if (targetIndex === -1) targetIndex = targetRows.findIndex((item) => !item.symbol && (item.quantity === '' || item.quantity === 0) && (item.premium === '' || item.premium === 0));
+          if (targetIndex === -1) {
+            targetRows.push({
+              id: `history-${trade.type.toLowerCase()}-${targetRows.length + 1}`,
+              date: '',
+              type: trade.type,
+              quantity: '',
+              symbol: '',
+              premium: '',
+              manualPrice: '',
+              realized: 0,
+              importIds: []
+            });
+            targetIndex = targetRows.length - 1;
+          }
+          const merged = mergeHistoryTrade(targetRows[targetIndex], trade);
+          targetRows[targetIndex] = {
+            ...merged,
+            date: trade.date || targetRows[targetIndex].date || ''
+          };
+          importedIds.add(String(trade.importId));
+          importedCount += 1;
+        }
+
+        if (!importedCount) {
+          message.info(skippedCount ? 'No habia operaciones nuevas para importar.' : 'No encontre opciones ejecutadas en el archivo.');
+          return;
+        }
+
+        const historyNext = [...calls, ...puts];
+        strategy.history = historyNext;
+        applyStrategyChange({ ...strategy, history: historyNext });
+        message.success(`Importadas ${importedCount} operaciones de Matriz${skippedCount ? ` (${skippedCount} repetidas omitidas)` : ''}.`);
+      }
+
+      async function handleMatrizCsvUpload(event) {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const rows = parseDelimitedTable(text);
+          const trades = rows.map(matrizTradeFromRow).filter(Boolean);
+          importMatrizTrades(trades);
+        } catch (error) {
+          message.error(`No pude importar el reporte de Matriz: ${error.message}`);
+        }
       }
 
       function ResultValue({ value }) {
@@ -3116,6 +3269,14 @@
               <div className="panel-header">
                 <Space size={8}>
                   <div className="panel-title">Historial del dia</div>
+                  <Button size="small" icon={<UploadOutlined />} onClick={() => historyCsvInputRef.current?.click()}>Cargar</Button>
+                  <input
+                    ref={historyCsvInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    style={{ display: 'none' }}
+                    onChange={handleMatrizCsvUpload}
+                  />
                   <Popconfirm
                     title="Limpiar historial"
                     description="Borra todas las operaciones del historial del dia."
@@ -3133,12 +3294,22 @@
                 getRowType={(row) => row.type}
                 optionsByType={optionSelectOptionsByType}
                 premiumTitle="PRIMA/PRECIO"
+                columnWidths={{ symbol: 96, premium: 86 }}
                 extraColumns={[
                   {
                     key: 'grossPreview',
                     title: 'BRUTO',
                     width: 76,
                     render: (value) => value === null || value === undefined ? <span>—</span> : <ResultValue value={value} />
+                  },
+                  {
+                    key: 'realized',
+                    title: 'RESULTADO',
+                    width: 86,
+                    render: (value) => {
+                      const numeric = parseNumeric(value);
+                      return numeric === null || numeric === 0 ? <span>—</span> : <ResultValue value={numeric} />;
+                    }
                   }
                 ]}
                 onCellFocus={(rowIndex, colIndex) => {

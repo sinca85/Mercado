@@ -121,7 +121,8 @@ function normalizeHistory(inputHistory) {
       symbol: String(item.symbol || item.base || '').toUpperCase(),
       premium: item.premium ?? '',
       manualPrice: item.manualPrice ?? '',
-      realized: item.realized ?? 0
+      realized: item.realized ?? 0,
+      importIds: Array.isArray(item.importIds) ? item.importIds.map(String) : []
     };
   });
   const puts = Array.from({ length: Math.max(HISTORY_ROWS_PER_SIDE, byType.PUT.length) }, (_item, index) => {
@@ -134,7 +135,8 @@ function normalizeHistory(inputHistory) {
       symbol: String(item.symbol || item.base || '').toUpperCase(),
       premium: item.premium ?? '',
       manualPrice: item.manualPrice ?? '',
-      realized: item.realized ?? 0
+      realized: item.realized ?? 0,
+      importIds: Array.isArray(item.importIds) ? item.importIds.map(String) : []
     };
   });
   const acc = byType.ACC.map((item, index) => ({
@@ -145,7 +147,8 @@ function normalizeHistory(inputHistory) {
     symbol: String(item.symbol || item.base || '').toUpperCase(),
     premium: item.premium ?? '',
     manualPrice: item.manualPrice ?? '',
-    realized: item.realized ?? 0
+    realized: item.realized ?? 0,
+    importIds: Array.isArray(item.importIds) ? item.importIds.map(String) : []
   }));
   return [...calls, ...puts, ...acc];
 }
