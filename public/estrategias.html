@@ -1114,7 +1114,7 @@
         if (previous > 0 && current > 0) changes.push((current / previous) - 1);
       }
       if (changes.length < days) return [];
-      const start = Math.floor(Math.random() * Math.max(1, changes.length - days + 1));
+      const start = randomInt(changes.length - days + 1);
       return changes.slice(start, start + days);
     }
 
@@ -1144,11 +1144,21 @@
         .map(({ rawTime, ...bar }) => bar);
     }
 
+    function randomInt(maxExclusive) {
+      const max = Math.max(1, Math.floor(maxExclusive));
+      if (window.crypto?.getRandomValues) {
+        const values = new Uint32Array(1);
+        window.crypto.getRandomValues(values);
+        return values[0] % max;
+      }
+      return Math.floor(Math.random() * max);
+    }
+
     function historicalSimulationWindow(payload, days, historyCount = 60) {
       const bars = historicalDailyBars(payload);
       const needed = historyCount + days;
       if (bars.length < needed) return { changes: [], historyBars: [], simulationSourceBars: [] };
-      const start = Math.floor(Math.random() * Math.max(1, bars.length - needed + 1));
+      const start = randomInt(bars.length - needed + 1);
       const selected = bars.slice(start, start + needed);
       const historyBars = selected.slice(0, historyCount);
       const simulationSourceBars = selected.slice(historyCount);
@@ -1156,7 +1166,15 @@
         const previous = index === 0 ? historyBars[historyBars.length - 1] : simulationSourceBars[index - 1];
         return previous?.close > 0 && bar.close > 0 ? (bar.close / previous.close) - 1 : null;
       }).filter((value) => Number.isFinite(value));
-      return { changes, historyBars, simulationSourceBars };
+      return {
+        changes,
+        historyBars,
+        simulationSourceBars,
+        range: {
+          fechaDesde: selected[0]?.time || null,
+          fechaHasta: selected[selected.length - 1]?.time || null
+        }
+      };
     }
 
     function isoDateFromTime(time) {
@@ -1166,10 +1184,11 @@
     function randomHistoricalRequestRange(days, historyCount = 60) {
       const today = startOfLocalDay();
       const maxLookbackDays = 365 * 5;
-      const windowCalendarDays = Math.min(700, Math.max(180, Math.ceil((days + historyCount) * 3.2)));
+      const neededTradingDays = days + historyCount;
+      const windowCalendarDays = Math.min(300, Math.max(120, Math.ceil(neededTradingDays * 1.6) + 14));
       const latestEndOffset = 2;
       const maxEndOffset = Math.max(latestEndOffset + 1, maxLookbackDays - windowCalendarDays);
-      const endOffset = latestEndOffset + Math.floor(Math.random() * Math.max(1, maxEndOffset - latestEndOffset));
+      const endOffset = latestEndOffset + randomInt(Math.max(1, maxEndOffset - latestEndOffset));
       const end = new Date(today.getTime());
       end.setDate(end.getDate() - endOffset);
       const start = new Date(end.getTime());
@@ -2004,7 +2023,7 @@
           });
           const response = await requestJson(`/api/historical/${encodeURIComponent(underlying || 'GGAL')}?${params.toString()}`);
           const windowData = historicalSimulationWindow(response, days, historyCount);
-          return { ...windowData, range };
+          return { ...windowData, range: windowData.range || range, requestRange: range };
         }
 
         async function startSimulation(event) {
