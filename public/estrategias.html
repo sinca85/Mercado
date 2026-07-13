@@ -2796,7 +2796,7 @@
         const quantity = parseNumeric(row?.quantity);
         const premium = parseNumeric(row?.premium);
         if (quantity === null || premium === null) return null;
-        return quantity * premium * -1;
+        return quantity * premium * -OPTION_MULTIPLIER;
       }
 
       const historyRowsWithResults = [
