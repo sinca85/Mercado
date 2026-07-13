@@ -63,6 +63,24 @@
       text-transform: uppercase;
     }
 
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: none;
+    }
+
+    .controls label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      user-select: none;
+    }
+
     .pill {
       padding: 4px 8px;
       border: 1px solid var(--line);
@@ -83,6 +101,14 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel);
+    }
+
+    #structureOverlay {
+      position: absolute;
+      inset: 12px;
+      z-index: 2;
+      pointer-events: none;
+      overflow: visible;
     }
 
     .empty {
@@ -106,13 +132,19 @@
       <div id="subtitle" class="subtitle">Esperando simulacion...</div>
     </div>
     <div class="status">
+      <div class="controls">
+        <label><input id="toggleStructure" type="checkbox" checked /> Estructura</label>
+        <label><input id="togglePivots" type="checkbox" /> Pivotes H/L</label>
+      </div>
       <span id="mode" class="pill">-</span>
       <span id="step" class="pill">0/0</span>
       <span id="last" class="pill">Sin datos</span>
+      <span id="structureStatus" class="pill">SIN DEFINIR</span>
     </div>
   </header>
   <main class="chart-wrap">
     <div id="chart"></div>
+    <svg id="structureOverlay" aria-hidden="true"></svg>
   </main>
   <div id="empty" class="empty">Inicia una simulacion desde la planilla para ver el grafico sincronizado.</div>
 
@@ -126,7 +158,13 @@
     const modeEl = document.getElementById('mode');
     const stepEl = document.getElementById('step');
     const lastEl = document.getElementById('last');
+    const structureStatusEl = document.getElementById('structureStatus');
+    const structureOverlayEl = document.getElementById('structureOverlay');
+    const toggleStructureEl = document.getElementById('toggleStructure');
+    const togglePivotsEl = document.getElementById('togglePivots');
     let didFitInitialContent = false;
+    let lastState = null;
+    let lastBars = [];
 
     const chart = LightweightCharts.createChart(chartEl, {
       autoSize: true,
@@ -169,6 +207,127 @@
       return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(Number(value || 0));
     }
 
+    function isPivotHigh(candles, index, left, right) {
+      const high = Number(candles[index]?.high);
+      if (!Number.isFinite(high)) return false;
+      for (let offset = 1; offset <= left; offset += 1) {
+        if (!(high > Number(candles[index - offset]?.high))) return false;
+      }
+      for (let offset = 1; offset <= right; offset += 1) {
+        if (!(high > Number(candles[index + offset]?.high))) return false;
+      }
+      return true;
+    }
+
+    function isPivotLow(candles, index, left, right) {
+      const low = Number(candles[index]?.low);
+      if (!Number.isFinite(low)) return false;
+      for (let offset = 1; offset <= left; offset += 1) {
+        if (!(low < Number(candles[index - offset]?.low))) return false;
+      }
+      for (let offset = 1; offset <= right; offset += 1) {
+        if (!(low < Number(candles[index + offset]?.low))) return false;
+      }
+      return true;
+    }
+
+    function calculateMarketStructure(candles, {
+      pivotLeft = 3,
+      pivotRight = 3,
+      confirmWithClose = true
+    } = {}) {
+      const rows = candles.map(() => ({
+        trend: 0,
+        structuralLevel: null,
+        confirmedPivotHigh: null,
+        confirmedPivotLow: null,
+        bullishChange: false,
+        bearishChange: false
+      }));
+      let trend = 0;
+      let structuralLevel = null;
+      let lastPivotHigh = null;
+      let lastPivotLow = null;
+
+      for (let index = 0; index < candles.length; index += 1) {
+        const confirmedIndex = index - pivotRight;
+        if (confirmedIndex >= pivotLeft) {
+          if (isPivotHigh(candles, confirmedIndex, pivotLeft, pivotRight)) {
+            lastPivotHigh = {
+              index: confirmedIndex,
+              confirmedAt: index,
+              value: Number(candles[confirmedIndex].high)
+            };
+            rows[confirmedIndex].confirmedPivotHigh = lastPivotHigh.value;
+          }
+          if (isPivotLow(candles, confirmedIndex, pivotLeft, pivotRight)) {
+            lastPivotLow = {
+              index: confirmedIndex,
+              confirmedAt: index,
+              value: Number(candles[confirmedIndex].low)
+            };
+            rows[confirmedIndex].confirmedPivotLow = lastPivotLow.value;
+          }
+        }
+
+        const close = Number(candles[index]?.close);
+        const high = Number(candles[index]?.high);
+        const low = Number(candles[index]?.low);
+        const breakUpValue = confirmWithClose ? close : high;
+        const breakDownValue = confirmWithClose ? close : low;
+
+        if (trend === 0) {
+          if (lastPivotHigh && breakUpValue > lastPivotHigh.value) {
+            trend = 1;
+            structuralLevel = lastPivotLow?.value ?? structuralLevel;
+            rows[index].bullishChange = true;
+          } else if (lastPivotLow && breakDownValue < lastPivotLow.value) {
+            trend = -1;
+            structuralLevel = lastPivotHigh?.value ?? structuralLevel;
+            rows[index].bearishChange = true;
+          }
+        } else if (trend === 1) {
+          if (lastPivotLow && (structuralLevel === null || lastPivotLow.value > structuralLevel)) {
+            structuralLevel = lastPivotLow.value;
+          }
+          if (structuralLevel !== null && breakDownValue < structuralLevel) {
+            trend = -1;
+            structuralLevel = lastPivotHigh?.value ?? structuralLevel;
+            rows[index].bearishChange = true;
+          }
+        } else if (trend === -1) {
+          if (lastPivotHigh && (structuralLevel === null || lastPivotHigh.value < structuralLevel)) {
+            structuralLevel = lastPivotHigh.value;
+          }
+          if (structuralLevel !== null && breakUpValue > structuralLevel) {
+            trend = 1;
+            structuralLevel = lastPivotLow?.value ?? structuralLevel;
+            rows[index].bullishChange = true;
+          }
+        }
+
+        rows[index].trend = trend;
+        rows[index].structuralLevel = structuralLevel;
+      }
+
+      const current = rows[rows.length - 1] || {
+        trend: 0,
+        structuralLevel: null
+      };
+      return {
+        candles: rows,
+        current: {
+          trend: current.trend,
+          structuralLevel: current.structuralLevel,
+          text: current.trend === 1
+            ? `Pasa a bajista debajo de ${formatNumber(current.structuralLevel)}`
+            : current.trend === -1
+            ? `Pasa a alcista encima de ${formatNumber(current.structuralLevel)}`
+            : 'Sin estructura definida'
+        }
+      };
+    }
+
     function barsForState(state) {
       const historicalBars = Array.isArray(state?.historicalBars) ? state.historicalBars : [];
       const simulationBars = Array.isArray(state?.simulationBars) ? state.simulationBars : [];
@@ -179,8 +338,149 @@
       ].filter((bar) => bar && bar.time && Number(bar.close) > 0);
     }
 
+    function trendLabel(trend) {
+      if (trend === 1) return 'ALCISTA';
+      if (trend === -1) return 'BAJISTA';
+      return 'SIN DEFINIR';
+    }
+
+    function barHalfWidth(bars) {
+      if (bars.length < 2) return 5;
+      const coords = bars
+        .map((bar) => chart.timeScale().timeToCoordinate(bar.time))
+        .filter((value) => Number.isFinite(value));
+      const gaps = [];
+      for (let index = 1; index < coords.length; index += 1) {
+        const gap = Math.abs(coords[index] - coords[index - 1]);
+        if (gap > 0) gaps.push(gap);
+      }
+      return Math.max(3, Math.min(18, (gaps[0] || 10) / 2));
+    }
+
+    function svgEl(tag, attrs = {}) {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      Object.entries(attrs).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) node.setAttribute(key, String(value));
+      });
+      return node;
+    }
+
+    function drawMarketStructureOverlay(bars, structure) {
+      structureOverlayEl.replaceChildren();
+      const visible = toggleStructureEl.checked;
+      const showPivots = togglePivotsEl.checked;
+      const rect = chartEl.getBoundingClientRect();
+      structureOverlayEl.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
+      structureOverlayEl.style.display = visible && bars.length ? 'block' : 'none';
+      if (!visible || !bars.length) return;
+
+      const rows = structure.candles || [];
+      const halfWidth = barHalfWidth(bars);
+
+      rows.forEach((row, index) => {
+        if (!row.trend) return;
+        const x = chart.timeScale().timeToCoordinate(bars[index].time);
+        if (!Number.isFinite(x)) return;
+        structureOverlayEl.appendChild(svgEl('rect', {
+          x: x - halfWidth,
+          y: 0,
+          width: halfWidth * 2,
+          height: rect.height,
+          fill: row.trend === 1 ? 'rgba(32, 198, 90, 0.07)' : 'rgba(255, 77, 79, 0.07)'
+        }));
+      });
+
+      const redPath = [];
+      const greenPath = [];
+      rows.forEach((row, index) => {
+        if (!row.trend || row.structuralLevel === null) return;
+        const x = chart.timeScale().timeToCoordinate(bars[index].time);
+        const y = series.priceToCoordinate(row.structuralLevel);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        const target = row.trend === 1 ? redPath : greenPath;
+        const x0 = x - halfWidth;
+        const x1 = x + halfWidth;
+        if (!target.length) target.push(`M ${x0} ${y}`);
+        else target.push(`L ${x0} ${y}`);
+        target.push(`L ${x1} ${y}`);
+      });
+
+      if (redPath.length) {
+        structureOverlayEl.appendChild(svgEl('path', {
+          d: redPath.join(' '),
+          fill: 'none',
+          stroke: '#ff4d4f',
+          'stroke-width': 2,
+          'stroke-linejoin': 'round'
+        }));
+      }
+      if (greenPath.length) {
+        structureOverlayEl.appendChild(svgEl('path', {
+          d: greenPath.join(' '),
+          fill: 'none',
+          stroke: '#20c65a',
+          'stroke-width': 2,
+          'stroke-linejoin': 'round'
+        }));
+      }
+
+      rows.forEach((row, index) => {
+        const x = chart.timeScale().timeToCoordinate(bars[index].time);
+        if (!Number.isFinite(x)) return;
+        if (row.bullishChange || row.bearishChange) {
+          const label = row.bullishChange ? 'ALCISTA' : 'BAJISTA';
+          const color = row.bullishChange ? '#20c65a' : '#ff4d4f';
+          const price = row.bullishChange ? bars[index].low : bars[index].high;
+          const yBase = series.priceToCoordinate(price);
+          if (Number.isFinite(yBase)) {
+            const y = row.bullishChange ? yBase + 20 : yBase - 20;
+            const width = 58;
+            const height = 18;
+            structureOverlayEl.appendChild(svgEl('rect', {
+              x: x - width / 2,
+              y: y - height / 2,
+              width,
+              height,
+              rx: 3,
+              fill: color,
+              opacity: 0.92
+            }));
+            const text = svgEl('text', {
+              x,
+              y: y + 4,
+              fill: '#071019',
+              'font-size': 10,
+              'font-weight': 900,
+              'text-anchor': 'middle'
+            });
+            text.textContent = label;
+            structureOverlayEl.appendChild(text);
+          }
+        }
+
+        if (showPivots && (row.confirmedPivotHigh !== null || row.confirmedPivotLow !== null)) {
+          const isHigh = row.confirmedPivotHigh !== null;
+          const price = isHigh ? row.confirmedPivotHigh : row.confirmedPivotLow;
+          const y = series.priceToCoordinate(price);
+          if (!Number.isFinite(y)) return;
+          const text = svgEl('text', {
+            x,
+            y: isHigh ? y - 7 : y + 14,
+            fill: isHigh ? '#ffb3b3' : '#a8f5bf',
+            'font-size': 11,
+            'font-weight': 900,
+            'text-anchor': 'middle'
+          });
+          text.textContent = isHigh ? 'H' : 'L';
+          structureOverlayEl.appendChild(text);
+        }
+      });
+    }
+
     function render(state) {
       const bars = barsForState(state);
+      lastState = state;
+      lastBars = bars;
       emptyEl.style.display = bars.length ? 'none' : 'grid';
       titleEl.textContent = state?.strategyName
         ? `${state.underlying || ''} - ${state.strategyName}`
@@ -192,15 +492,26 @@
       stepEl.textContent = `${Number(state?.step || 0)}/${Number(state?.totalSteps || 0)}`;
       const last = bars[bars.length - 1];
       lastEl.textContent = last ? `Ult ${formatNumber(last.close)}` : 'Sin datos';
+      const structure = calculateMarketStructure(bars, { pivotLeft: 3, pivotRight: 3, confirmWithClose: true });
+      const structureLevelText = structure.current.structuralLevel === null
+        ? ''
+        : ` | Nivel ${formatNumber(structure.current.structuralLevel)} | ${structure.current.text}`;
+      structureStatusEl.textContent = `${trendLabel(structure.current.trend)}${structureLevelText}`;
       const rangeLabel = state?.historicalRange?.fechaDesde && state?.historicalRange?.fechaHasta
         ? ` | rango ${state.historicalRange.fechaDesde} a ${state.historicalRange.fechaHasta}`
         : '';
       if (bars.length) subtitleEl.textContent += rangeLabel;
       series.setData(bars);
+      requestAnimationFrame(() => drawMarketStructureOverlay(bars, structure));
       if (bars.length && !didFitInitialContent) {
         chart.timeScale().fitContent();
         didFitInitialContent = true;
       }
+    }
+
+    function redrawOverlay() {
+      const structure = calculateMarketStructure(lastBars, { pivotLeft: 3, pivotRight: 3, confirmWithClose: true });
+      requestAnimationFrame(() => drawMarketStructureOverlay(lastBars, structure));
     }
 
     function readStoredState() {
@@ -213,6 +524,11 @@
     }
 
     render(readStoredState());
+
+    toggleStructureEl.addEventListener('change', redrawOverlay);
+    togglePivotsEl.addEventListener('change', redrawOverlay);
+    chart.timeScale().subscribeVisibleTimeRangeChange(redrawOverlay);
+    window.addEventListener('resize', redrawOverlay);
 
     if ('BroadcastChannel' in window) {
       const channel = new BroadcastChannel('sabro-simulation-chart');
