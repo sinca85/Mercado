@@ -316,6 +316,41 @@
       text-align: left;
     }
 
+    .quick-quantity-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      height: 100%;
+    }
+
+    .quick-quantity-button {
+      width: 26px;
+      height: 21px;
+      padding: 0;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .quick-quantity-button.buy {
+      background: #087a28;
+      border-color: #065e1f;
+    }
+
+    .quick-quantity-button.sell {
+      background: #c60000;
+      border-color: #950000;
+    }
+
+    .quick-quantity-button:hover {
+      filter: brightness(1.15);
+    }
+
     .input-grid .target-roi-positive {
       color: #087a28;
     }
@@ -1378,9 +1413,9 @@
         .filter((cells) => cells.some(Boolean));
     }
 
-    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest, targetHighlights = {}, onTypeDoubleClick, columnWidths = {} }) {
+    function SpreadsheetInputGrid({ rows, getRowType, onUpdate, optionsByType, premiumTitle = 'PRIMA', extraColumnsAfterSymbol = [], extraColumns = [], onCellFocus, focusRequest, targetHighlights = {}, onTypeDoubleClick, columnWidths = {}, quantityActions = null }) {
       const columns = [
-        { key: 'quantity', title: 'CANT', editable: true, width: columnWidths.quantity || 45 },
+        { key: 'quantity', title: 'CANT', editable: !quantityActions, width: columnWidths.quantity || (quantityActions ? 78 : 45), render: quantityActions || undefined },
         { key: 'symbol', title: 'BASE', editable: true, width: columnWidths.symbol },
         ...extraColumnsAfterSymbol.map((column) => ({ ...column, editable: false })),
         { key: 'premium', title: premiumTitle, editable: true, width: columnWidths.premium || 86 },
@@ -2272,6 +2307,7 @@
       const fixedHistory = makeFixedHistory(strategy.history);
       const simulationSpot = simulation.spot || null;
       const simulatedNow = simulation.simulatedNow || Date.now();
+      const isSimulationTradingMode = Boolean(strategy.simulationEnabled);
       const shouldSimulateChain = simulationSpot && Number(simulation.step || 0) > 0;
       const chainOptions = shouldSimulateChain
         ? simulateOptionChain(rawChainOptions, simulationSpot, strategy, simulatedNow)
@@ -2423,6 +2459,48 @@
         strategy.history = nextStrategy.history;
         applyStrategyChange(nextStrategy);
         message.success(`${symbol} enviado al historial.`);
+      }
+
+      function quickTradeToHistory(rowIndex, quantity) {
+        const row = strategyRowsWithTarget[rowIndex];
+        if (!row) {
+          message.info('No hay fila de estrategia para operar.');
+          return;
+        }
+        const symbol = String(row?.symbol || '').toUpperCase();
+        const premium = currentPremiumForLeg(row);
+        if (!symbol || !(premium > 0)) {
+          message.info('No hay base o prima valida para operar.');
+          return;
+        }
+
+        const history = makeFixedHistory(strategy.history);
+        const calls = history.filter((item) => item.type === 'CALL');
+        const puts = history.filter((item) => item.type === 'PUT');
+        const targetRows = row.type === 'CALL' ? calls : puts;
+        const trade = { type: row.type, quantity, symbol, premium };
+        let targetIndex = targetRows.findIndex((item) => String(item.symbol || '').toUpperCase() === symbol);
+        if (targetIndex === -1) targetIndex = targetRows.findIndex((item) => !item.symbol && (item.quantity === '' || item.quantity === 0) && (item.premium === '' || item.premium === 0));
+        if (targetIndex === -1) {
+          targetRows.push({
+            id: `history-${row.type.toLowerCase()}-${targetRows.length + 1}`,
+            date: '',
+            type: row.type,
+            quantity: '',
+            symbol: '',
+            premium: '',
+            manualPrice: '',
+            realized: 0,
+            importIds: []
+          });
+          targetIndex = targetRows.length - 1;
+        }
+
+        targetRows[targetIndex] = mergeHistoryTrade(targetRows[targetIndex], trade);
+        const historyNext = [...calls, ...puts];
+        strategy.history = historyNext;
+        applyStrategyChange({ ...strategy, history: historyNext });
+        message.success(`${quantity > 0 ? 'Compra' : 'Venta'} ${Math.abs(quantity)} ${symbol} al historial.`);
       }
 
       function copyStrategyBlock(type) {
@@ -3278,6 +3356,42 @@
                 focusRequest={strategyGridFocus}
                 targetHighlights={bestTargetHighlights}
                 onTypeDoubleClick={(_row, rowIndex) => transferLegToHistory(rowIndex)}
+                quantityActions={isSimulationTradingMode ? (_value, row, rowIndex) => (
+                  <div className="quick-quantity-actions">
+                    <button
+                      type="button"
+                      className="quick-quantity-button buy"
+                      title="Comprar 5"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        quickTradeToHistory(rowIndex, 5);
+                      }}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      className="quick-quantity-button sell"
+                      title="Vender 5"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        quickTradeToHistory(rowIndex, -5);
+                      }}
+                    >
+                      ▼
+                    </button>
+                  </div>
+                ) : null}
               />
             </section>
 
