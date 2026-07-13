@@ -134,6 +134,37 @@
       flex-wrap: wrap;
     }
 
+    .simulation-floating-control {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 80;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(23, 33, 49, 0.94);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(8px);
+    }
+
+    .simulation-floating-status {
+      min-width: 76px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 900;
+      text-align: right;
+    }
+
+    .simulation-floating-mode {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
     .strategy-grid {
       display: grid;
       grid-template-columns: minmax(560px, 1fr) 420px;
@@ -2220,10 +2251,12 @@
 
         window.addEventListener('sabro:startSimulation', startSimulation);
         window.addEventListener('sabro:toggleSimulationPause', toggleSimulationPause);
+        window.addEventListener('sabro:advanceSimulation', advanceSimulationTick);
         window.addEventListener('keydown', handleManualStep);
         return () => {
           window.removeEventListener('sabro:startSimulation', startSimulation);
           window.removeEventListener('sabro:toggleSimulationPause', toggleSimulationPause);
+          window.removeEventListener('sabro:advanceSimulation', advanceSimulationTick);
           window.removeEventListener('keydown', handleManualStep);
         };
       }, [payload?.calculation?.spot, payload?.strategy?.targetSpot, payload?.strategy?.simulationEnabled]);
@@ -3538,6 +3571,10 @@
         window.dispatchEvent(new CustomEvent('sabro:toggleSimulationPause'));
       }
 
+      function advanceSimulation() {
+        window.dispatchEvent(new CustomEvent('sabro:advanceSimulation'));
+      }
+
       async function loadSimulationHistory() {
         if (!activeStrategyId) return;
         setSimulationHistoryLoading(true);
@@ -3680,6 +3717,39 @@
                 onSimulationEnabledChange={setSimulationEnabled}
               />
             </div>
+            {simulationEnabled ? (
+              <div className="simulation-floating-control">
+                <div>
+                  <div className="simulation-floating-status">
+                    {simulationStatus.step || 0}/{simulationStatus.totalSteps || simulationDays}
+                  </div>
+                  <div className="simulation-floating-mode">
+                    {simulationStatus.active || simulationStatus.paused || simulationStatus.completed
+                      ? (simulationStatus.mode === 'historical' ? 'Historico' : 'Aleatorio')
+                      : 'Listo'}
+                  </div>
+                </div>
+                {simulationStatus.active ? (
+                  <Button
+                    type="primary"
+                    icon={<PlayCircleOutlined />}
+                    onClick={advanceSimulation}
+                    disabled={simulationStatus.paused}
+                  >
+                    Siguiente
+                  </Button>
+                ) : (
+                  <Button
+                    type="primary"
+                    icon={<PlayCircleOutlined />}
+                    onClick={startSimulation}
+                    disabled={simulationStatus.paused}
+                  >
+                    Iniciar simulacion
+                  </Button>
+                )}
+              </div>
+            ) : null}
             <Modal
               title="Historial de simulaciones"
               open={simulationHistoryOpen}
