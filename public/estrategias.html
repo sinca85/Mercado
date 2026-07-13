@@ -2212,9 +2212,9 @@
           const target = event.target;
           const tagName = String(target?.tagName || '').toLowerCase();
           if (['input', 'textarea', 'select', 'button'].includes(tagName) || target?.isContentEditable) return;
+          if (payload?.strategy?.simulationEnabled) event.preventDefault();
           const plan = simulationPlanRef.current;
           if (!plan || !plan.manual || plan.paused) return;
-          event.preventDefault();
           advanceSimulationTick();
         }
 
@@ -2226,7 +2226,7 @@
           window.removeEventListener('sabro:toggleSimulationPause', toggleSimulationPause);
           window.removeEventListener('keydown', handleManualStep);
         };
-      }, [payload?.calculation?.spot, payload?.strategy?.targetSpot]);
+      }, [payload?.calculation?.spot, payload?.strategy?.targetSpot, payload?.strategy?.simulationEnabled]);
 
       useEffect(() => {
         onStrategyNameChange?.(payload?.strategy?.name || '');
