@@ -1674,7 +1674,10 @@
         const type = getRowType(rows[rowIndex]);
         if (columnKey === 'symbol') {
           const selected = (optionsByType[type] || []).find((option) => option.value === patch.symbol);
-          if (selected?.option) patch.premium = selected.option.last || selected.option.ask || rows[rowIndex].premium;
+          if (selected?.option) {
+            patch.premium = selected.option.bid ?? '';
+            patch.askPrice = selected.option.ask ?? '';
+          }
         }
         onUpdate(rowIndex, patch);
       }
@@ -2000,6 +2003,7 @@
       const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
       const [strategyRange, setStrategyRange] = useState({ from: null, to: null });
       const [strategyGridFocus, setStrategyGridFocus] = useState(null);
+      const [includeStrategyLoad, setIncludeStrategyLoad] = useState(true);
       const [inverseStrategy, setInverseStrategy] = useState({
         from: null,
         to: null,
@@ -2007,7 +2011,9 @@
         baseTo: null,
         targetGain: null,
         maxLoss: null,
-        shape: 'hat'
+        shape: 'hat',
+        direction: 'lateral',
+        targetPercent: 0
       });
       const [inverseResults, setInverseResults] = useState([]);
       const [simulation, setSimulation] = useState({ active: false, paused: false, spot: null, previousSpot: null, initialSpot: null, simulatedNow: null, step: 0, totalSteps: 0 });
@@ -2416,14 +2422,24 @@
       const chainOptions = shouldSimulateChain
         ? simulateOptionChain(rawChainOptions, simulationSpot, strategy, simulatedNow)
         : rawChainOptions;
+      const calculationLegs = includeStrategyLoad
+        ? fixedLegs
+        : fixedLegs.map((leg) => ({ ...leg, quantity: '', manualPrice: '' }));
       const calculation = simulationSpot
         ? calculateLocalStrategySnapshot({
-            strategy: { ...strategy, legs: fixedLegs, history: fixedHistory },
+            strategy: { ...strategy, legs: calculationLegs, history: fixedHistory },
             options: chainOptions,
             spot: simulationSpot,
             simulatedNow
           })
-        : payload.calculation;
+        : includeStrategyLoad
+        ? payload.calculation
+        : calculateLocalStrategySnapshot({
+            strategy: { ...strategy, legs: calculationLegs, history: fixedHistory },
+            options: chainOptions,
+            spot: payload.calculation?.spot || strategy.targetSpot || 0,
+            simulatedNow
+          });
       if (strategy.legs.length !== fixedLegs.length || strategy.legs.some((leg, index) => leg.id !== fixedLegs[index].id || leg.type !== fixedLegs[index].type)) {
         strategy.legs = fixedLegs;
       }
@@ -2984,6 +3000,16 @@
           ?? parseNumeric(contract?.bid);
       }
 
+      function bidForLeg(leg) {
+        const contract = contractForLeg(leg);
+        return parseNumeric(contract?.bid);
+      }
+
+      function askForLeg(leg) {
+        const contract = contractForLeg(leg);
+        return parseNumeric(contract?.ask);
+      }
+
       function displayPremiumForLeg(leg) {
         const marketPremium = marketPremiumForLeg(leg);
         if (marketPremium !== null) return marketPremium;
@@ -2995,7 +3021,8 @@
         const targetPremiumValue = targetPremiumValueForLeg(leg);
         return {
           ...leg,
-          premium: displayPremiumForLeg(leg),
+          premium: bidForLeg(leg) ?? '',
+          askPrice: askForLeg(leg) ?? '',
           autoIv: autoIv ? formatPercent(autoIv) : '',
           targetPremium: Number.isFinite(targetPremiumValue) ? formatNumber(targetPremiumValue, 3) : '',
           targetPremiumValue,
@@ -3396,6 +3423,13 @@
         value: Number(row.underlyingPrice),
         label: `${formatNumber(row.underlyingPrice, 2)} (${row.percent > 0 ? '+' : ''}${row.percent}%)`
       }));
+      const inversePercentOptions = Array.from({ length: 31 }, (_item, index) => {
+        const percent = -30 + index * 2;
+        return {
+          value: percent,
+          label: `${percent > 0 ? '+' : ''}${percent}%`
+        };
+      });
       const legColumns = [
         {
           title: 'TIPO',
@@ -3804,21 +3838,28 @@
                   <Button size="small" onClick={() => copyStrategyBlock('PUT')}>Copiar PUTS</Button>
                   <Button size="small" onClick={transferAllStrategyToHistory}>A hist.</Button>
                   <Button size="small" danger onClick={clearStrategyLoad}>Limpiar</Button>
+                  <Tooltip title="Comparar resultados con o sin la carga de estrategia">
+                    <Space size={4}>
+                      <span className="muted">Carga</span>
+                      <Switch
+                        size="small"
+                        checked={includeStrategyLoad}
+                        checkedChildren="On"
+                        unCheckedChildren="Off"
+                        onChange={setIncludeStrategyLoad}
+                      />
+                    </Space>
+                  </Tooltip>
                 </Space>
               </div>
               <SpreadsheetInputGrid
                 rows={strategyRowsWithTarget}
                 getRowType={(row) => row.type}
                 optionsByType={optionSelectOptionsByType}
+                premiumTitle="BID"
                 extraColumnsAfterSymbol={[{ key: 'autoIv', title: 'VI AUTO', width: 66 }]}
                 extraColumns={[
-                  { key: 'targetPremium', title: 'PRIMA TARGET', width: 96 },
-                  {
-                    key: 'targetRoi',
-                    title: 'ROI AL TARGET',
-                    width: 96,
-                    render: (value, row, rowIndex) => <TargetRoiValue value={value} dislocated={dislocatedTargetRois.has(rowIndex)} />
-                  },
+                  { key: 'askPrice', title: 'ASK', width: 86 },
                   {
                     key: 'actions',
                     title: '',
@@ -3839,62 +3880,6 @@
                 focusRequest={strategyGridFocus}
                 targetHighlights={bestTargetHighlights}
                 onTypeDoubleClick={(_row, rowIndex) => transferLegToHistory(rowIndex)}
-                quantityActions={isSimulationTradingMode ? (_value, row, rowIndex) => (
-                  <div className="quick-quantity-actions">
-                    <button
-                      type="button"
-                      className="quick-quantity-button buy"
-                      title="Comprar 5"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        quickTradeToHistory(rowIndex, 5);
-                      }}
-                    >
-                      ▲
-                    </button>
-                    <input
-                      className="quick-quantity-input"
-                      type="text"
-                      inputMode="decimal"
-                      value={row.quantity ?? ''}
-                      title="Cantidad"
-                      onMouseDown={(event) => {
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                      }}
-                      onDoubleClick={(event) => {
-                        event.stopPropagation();
-                      }}
-                      onKeyDown={(event) => {
-                        event.stopPropagation();
-                      }}
-                      onChange={(event) => updateStrategyLegRow(rowIndex, { quantity: event.target.value })}
-                    />
-                    <button
-                      type="button"
-                      className="quick-quantity-button sell"
-                      title="Vender 5"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        quickTradeToHistory(rowIndex, -5);
-                      }}
-                    >
-                      ▼
-                    </button>
-                  </div>
-                ) : null}
               />
             </section>
 
@@ -3908,96 +3893,28 @@
                 dataSource={simulationRows}
               />
               <div className="inverse-strategy-panel">
-                <div className="inverse-strategy-title">Estrategia inversa</div>
+                <div className="inverse-strategy-title">Detector de oportunidades</div>
                 <div className="inverse-strategy-grid">
                   <div className="inverse-strategy-field">
-                    <label>Desde</label>
+                    <label>Direccion</label>
                     <Select
                       size="small"
-                      showSearch
-                      allowClear
-                      value={inverseStrategy.from ?? undefined}
-                      placeholder="Precio"
-                      options={inversePriceOptions}
-                      optionFilterProp="label"
-                      onChange={(from) => setInverseStrategy((current) => ({ ...current, from: from ?? null }))}
-                    />
-                  </div>
-                  <div className="inverse-strategy-field">
-                    <label>Hasta</label>
-                    <Select
-                      size="small"
-                      showSearch
-                      allowClear
-                      value={inverseStrategy.to ?? undefined}
-                      placeholder="Precio"
-                      options={inversePriceOptions}
-                      optionFilterProp="label"
-                      onChange={(to) => setInverseStrategy((current) => ({ ...current, to: to ?? null }))}
-                    />
-                  </div>
-                  <div className="inverse-strategy-field">
-                    <label>Bases desde</label>
-                    <Select
-                      size="small"
-                      showSearch
-                      allowClear
-                      value={inverseStrategy.baseFrom ?? undefined}
-                      placeholder="Base"
-                      options={rangeBaseOptions}
-                      optionFilterProp="label"
-                      onChange={(baseFrom) => setInverseStrategy((current) => ({ ...current, baseFrom: baseFrom ?? null }))}
-                    />
-                  </div>
-                  <div className="inverse-strategy-field">
-                    <label>Bases hasta</label>
-                    <Select
-                      size="small"
-                      showSearch
-                      allowClear
-                      value={inverseStrategy.baseTo ?? undefined}
-                      placeholder="Base"
-                      options={rangeBaseOptions}
-                      optionFilterProp="label"
-                      onChange={(baseTo) => setInverseStrategy((current) => ({ ...current, baseTo: baseTo ?? null }))}
-                    />
-                  </div>
-                  <div className="inverse-strategy-field">
-                    <label>Ganancia objetivo</label>
-                    <InputNumber
-                      size="small"
-                      value={inverseStrategy.targetGain}
-                      step={1000}
-                      style={{ width: '100%' }}
-                      placeholder="Ej. 100000"
-                      onChange={(targetGain) => setInverseStrategy((current) => ({ ...current, targetGain }))}
-                    />
-                  </div>
-                  <div className="inverse-strategy-field">
-                    <label>Perdida maxima</label>
-                    <InputNumber
-                      size="small"
-                      value={inverseStrategy.maxLoss}
-                      min={0}
-                      step={1000}
-                      style={{ width: '100%' }}
-                      placeholder="Ej. 50000"
-                      onChange={(maxLoss) => setInverseStrategy((current) => ({ ...current, maxLoss }))}
-                    />
-                  </div>
-                  <div className="inverse-strategy-field">
-                    <label>Figura</label>
-                    <Select
-                      size="small"
-                      value={inverseStrategy.shape}
+                      value={inverseStrategy.direction}
                       options={[
-                        { value: 'hat', label: 'Galera' },
-                        { value: 'curve', label: 'Curva' },
-                        { value: 'ramp-up', label: 'Subida' },
-                        { value: 'ramp-down', label: 'Bajada' },
-                        { value: 'flat', label: 'Meseta' }
+                        { value: 'lateral', label: 'Lateral' },
+                        { value: 'bullish', label: 'Alcista' },
+                        { value: 'bearish', label: 'Bajista' }
                       ]}
-                      onChange={(shape) => setInverseStrategy((current) => ({ ...current, shape }))}
+                      onChange={(direction) => setInverseStrategy((current) => ({ ...current, direction }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Zona</label>
+                    <Select
+                      size="small"
+                      value={inverseStrategy.targetPercent}
+                      options={inversePercentOptions}
+                      onChange={(targetPercent) => setInverseStrategy((current) => ({ ...current, targetPercent }))}
                     />
                   </div>
                   <div className="inverse-strategy-field">
@@ -4005,9 +3922,9 @@
                     <Button
                       size="small"
                       type="primary"
-                      onClick={searchInverseStrategies}
+                      onClick={() => message.info('Proximo paso: buscar oportunidades contra la cartera usando BID/ASK ejecutables.')}
                     >
-                      Buscar
+                      Buscar oportunidades
                     </Button>
                   </div>
                 </div>
