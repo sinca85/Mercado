@@ -2005,17 +2005,11 @@
       const [strategyGridFocus, setStrategyGridFocus] = useState(null);
       const [includeStrategyLoad, setIncludeStrategyLoad] = useState(true);
       const [inverseStrategy, setInverseStrategy] = useState({
-        from: null,
-        to: null,
-        baseFrom: null,
-        baseTo: null,
-        targetGain: null,
-        maxLoss: null,
-        shape: 'hat',
         direction: 'lateral',
         zonePercent: 10
       });
       const [inverseResults, setInverseResults] = useState([]);
+      const [inverseSearching, setInverseSearching] = useState(false);
       const [simulation, setSimulation] = useState({ active: false, paused: false, spot: null, previousSpot: null, initialSpot: null, simulatedNow: null, step: 0, totalSteps: 0 });
       const recalcTimerRef = useRef(null);
       const simulationTimerRef = useRef(null);
@@ -2036,9 +2030,12 @@
         if (!strategyId) return;
         setLoading(true);
         try {
-          setPayload(await requestJson(`/api/strategies/${strategyId}${force ? '?force=1' : ''}`));
+          const data = await requestJson(`/api/strategies/${strategyId}${force ? '?force=1' : ''}`);
+          setPayload(data);
+          return data;
         } catch (error) {
           message.error(error.message);
+          return null;
         } finally {
           setLoading(false);
         }
@@ -3122,13 +3119,21 @@
         updateLeg(originalIndex, nextPatch);
       }
 
+      function executablePriceForOption(option, quantity) {
+        return quantity > 0
+          ? parseNumeric(option?.ask)
+          : parseNumeric(option?.bid);
+      }
+
       function inverseLegFromOption(option, quantity) {
+        const premium = executablePriceForOption(option, quantity);
         return {
           type: option.optionType,
           quantity,
           symbol: option.symbol,
           strike: Number(option.strike),
-          premium: optionMark(option)
+          premium,
+          manualPrice: premium
         };
       }
 
@@ -3150,130 +3155,62 @@
         return `${kind}: ${parts.join(' / ')}`;
       }
 
-      function scaleInverseCandidate(candidate, scale) {
-        const multiplier = Math.max(1, Math.min(200, Number(scale) || 1));
-        return {
-          ...candidate,
-          legs: candidate.legs.map((leg) => ({ ...leg, quantity: leg.quantity * multiplier })),
-          scale: multiplier
-        };
+      function gcdInteger(a, b) {
+        let x = Math.abs(Math.trunc(a));
+        let y = Math.abs(Math.trunc(b));
+        while (y) {
+          const next = x % y;
+          x = y;
+          y = next;
+        }
+        return x || 1;
       }
 
-      function evaluateInverseCandidate(candidate, rows, from, to, targetGain, maxLoss) {
-        const min = Math.min(from, to);
-        const max = Math.max(from, to);
-        const results = rows.map((row) => ({
-          price: Number(row.underlyingPrice),
-          result: inverseFinishAt(candidate.legs, Number(row.underlyingPrice))
-        })).filter((row) => Number.isFinite(row.price) && Number.isFinite(row.result));
-        const inside = results.filter((row) => row.price >= min && row.price <= max);
-        const outside = results.filter((row) => row.price < min || row.price > max);
-        if (!inside.length) return null;
-        const insideMin = Math.min(...inside.map((row) => row.result));
-        const insideAvg = inside.reduce((sum, row) => sum + row.result, 0) / inside.length;
-        const outsideMin = outside.length ? Math.min(...outside.map((row) => row.result)) : insideMin;
-        const outsideAvg = outside.length ? outside.reduce((sum, row) => sum + row.result, 0) / outside.length : insideAvg;
-        const outsideMax = outside.length ? Math.max(...outside.map((row) => row.result)) : insideAvg;
-        const worstLoss = Math.max(0, -Math.min(...results.map((row) => row.result)));
-        const netDebit = -candidate.legs.reduce((sum, leg) => sum + inverseLegNet(leg), 0);
-        const targetMiss = targetGain > 0 ? Math.max(0, targetGain - insideMin) : 0;
-        const targetOvershoot = targetGain > 0 ? Math.max(0, insideAvg - targetGain * 1.8) : 0;
-        const lossOver = maxLoss > 0 ? Math.max(0, worstLoss - maxLoss) : 0;
-        const outsideReward = Math.min(0, outsideMin) * 0.25 - Math.max(0, outsideMax - insideAvg) * 1.1;
-        const shapeReward = candidate.shapeBonus || 0;
-        const score = insideMin * 2.2
-          + insideAvg * 0.45
-          + outsideReward
-          + shapeReward
-          - targetMiss * 3.5
-          - targetOvershoot * 0.35
-          - lossOver * 4
-          - worstLoss * 0.22
-          - Math.max(0, netDebit) * 0.06;
-        return {
-          ...candidate,
-          insideMin,
-          insideAvg,
-          outsideMin,
-          outsideAvg,
-          outsideMax,
-          worstLoss,
-          netDebit,
-          score
-        };
+      function normalizeCandidateLegQuantities(legs) {
+        const divisor = legs
+          .map((leg) => Math.abs(Number(leg.quantity || 0)))
+          .filter((quantity) => Number.isInteger(quantity) && quantity > 0)
+          .reduce((acc, quantity) => gcdInteger(acc, quantity), 0) || 1;
+        return divisor > 1
+          ? legs.map((leg) => ({ ...leg, quantity: leg.quantity / divisor }))
+          : legs;
       }
 
-      function scoreScaledInverseCandidate(candidate, rows, from, to, targetGain, maxLoss) {
-        const unit = evaluateInverseCandidate(candidate, rows, from, to, 0, 0);
-        if (!unit || !(unit.insideAvg > 0 || unit.insideMin > 0)) return null;
-        const scaleBase = targetGain > 0 ? Math.max(unit.insideMin, unit.insideAvg * 0.72, 1) : Math.max(unit.insideAvg, 1);
-        const desiredScale = targetGain > 0 ? Math.max(1, Math.round(targetGain / scaleBase)) : 1;
-        const scaleOptions = Array.from(new Set([
-          1,
-          desiredScale - 2,
-          desiredScale - 1,
-          desiredScale,
-          desiredScale + 1,
-          desiredScale + 2
-        ].filter((value) => value >= 1 && value <= 200)));
-        return scaleOptions
-          .map((scale) => evaluateInverseCandidate(scaleInverseCandidate(candidate, scale), rows, from, to, targetGain, maxLoss))
-          .filter(Boolean)
-          .sort((a, b) => b.score - a.score)[0] || null;
-      }
-
-      function buildInverseCandidates(relevantRows, shape) {
+      function buildInverseCandidates(relevantRows) {
         const candidates = [];
         const calls = relevantRows.map((row) => row.call).filter(Boolean);
         const puts = relevantRows.map((row) => row.put).filter(Boolean);
-        const addCandidate = (kind, legs, shapeBonus = 0) => {
-          if (!legs.every((leg) => leg?.symbol && Number.isFinite(leg.premium) && leg.premium > 0)) return;
-          candidates.push({ id: `${kind}-${candidates.length + 1}`, kind, legs, shapeBonus });
+        const verticalRatios = [
+          [1, 1],
+          [1, 2],
+          [1, 3],
+          [2, 1],
+          [3, 1]
+        ];
+        const addCandidate = (kind, legs) => {
+          const normalizedLegs = normalizeCandidateLegQuantities(legs);
+          if (!normalizedLegs.every((leg) => leg?.symbol && Number.isFinite(leg.premium) && leg.premium > 0)) return;
+          const key = normalizedLegs.map((leg) => `${leg.symbol}:${leg.quantity}`).join('|');
+          if (candidates.some((candidate) => candidate.key === key)) return;
+          candidates.push({ id: `${kind}-${candidates.length + 1}`, key, kind, legs: normalizedLegs });
         };
 
         for (const list of [calls, puts]) {
           for (let i = 0; i < list.length; i += 1) {
-            addCandidate(`Long ${list[i].optionType}`, [inverseLegFromOption(list[i], 1)], shape === 'curve' ? 1000 : 0);
-            addCandidate(`Short ${list[i].optionType}`, [inverseLegFromOption(list[i], -1)], shape === 'flat' ? 400 : 0);
+            addCandidate(`Comprar ${list[i].optionType}`, [inverseLegFromOption(list[i], 1)]);
+            addCandidate(`Vender ${list[i].optionType}`, [inverseLegFromOption(list[i], -1)]);
             for (let j = i + 1; j < list.length; j += 1) {
               const low = list[i];
               const high = list[j];
               if (low.optionType === 'CALL') {
-                addCandidate('Bull call spread', [inverseLegFromOption(low, 1), inverseLegFromOption(high, -1)], shape === 'ramp-up' ? 1800 : 0);
-                addCandidate('Bear call spread', [inverseLegFromOption(low, -1), inverseLegFromOption(high, 1)], shape === 'ramp-down' ? 1400 : 0);
+                for (const [buyRatio, sellRatio] of verticalRatios) {
+                  addCandidate(`Bull call ${buyRatio}:${sellRatio}`, [inverseLegFromOption(low, buyRatio), inverseLegFromOption(high, -sellRatio)]);
+                  addCandidate(`Bear call ${sellRatio}:${buyRatio}`, [inverseLegFromOption(low, -sellRatio), inverseLegFromOption(high, buyRatio)]);
+                }
               } else {
-                addCandidate('Bear put spread', [inverseLegFromOption(high, 1), inverseLegFromOption(low, -1)], shape === 'ramp-down' ? 1800 : 0);
-                addCandidate('Bull put spread', [inverseLegFromOption(high, -1), inverseLegFromOption(low, 1)], shape === 'ramp-up' ? 1400 : 0);
-              }
-            }
-          }
-        }
-
-        for (const list of [calls, puts]) {
-          for (let i = 0; i < list.length - 2; i += 1) {
-            for (let j = i + 1; j < list.length - 1; j += 1) {
-              for (let k = j + 1; k < list.length; k += 1) {
-                addCandidate(`${list[i].optionType} butterfly`, [
-                  inverseLegFromOption(list[i], 1),
-                  inverseLegFromOption(list[j], -2),
-                  inverseLegFromOption(list[k], 1)
-                ], ['hat', 'curve'].includes(shape) ? 2200 : 0);
-              }
-            }
-          }
-        }
-
-        for (const list of [calls, puts]) {
-          for (let i = 0; i < list.length - 3; i += 1) {
-            for (let j = i + 1; j < list.length - 2; j += 1) {
-              for (let k = j + 1; k < list.length - 1; k += 1) {
-                for (let l = k + 1; l < list.length; l += 1) {
-                  addCandidate(`${list[i].optionType} condor`, [
-                    inverseLegFromOption(list[i], 1),
-                    inverseLegFromOption(list[j], -1),
-                    inverseLegFromOption(list[k], -1),
-                    inverseLegFromOption(list[l], 1)
-                  ], ['hat', 'flat'].includes(shape) ? 3000 : 0);
+                for (const [buyRatio, sellRatio] of verticalRatios) {
+                  addCandidate(`Bear put ${buyRatio}:${sellRatio}`, [inverseLegFromOption(high, buyRatio), inverseLegFromOption(low, -sellRatio)]);
+                  addCandidate(`Bull put ${sellRatio}:${buyRatio}`, [inverseLegFromOption(high, -sellRatio), inverseLegFromOption(low, buyRatio)]);
                 }
               }
             }
@@ -3283,49 +3220,147 @@
         return candidates;
       }
 
-      function searchInverseStrategies() {
-        const from = Number(inverseStrategy.from);
-        const to = Number(inverseStrategy.to);
-        if (!(from > 0) || !(to > 0)) {
-          message.info('Elegí desde y hasta para buscar.');
-          return;
+      function scoreOpportunityCandidate(candidate, baseSnapshot, candidateSnapshot, direction, zonePercent) {
+        const baseByPercent = new Map((baseSnapshot.percentScenarios || []).map((row) => [Number(row.percent), row]));
+        const rows = (candidateSnapshot.percentScenarios || []).map((row) => {
+          const baseRow = baseByPercent.get(Number(row.percent));
+          const baseResult = Number(baseRow?.finish || 0);
+          const total = Number(row.finish || 0);
+          return {
+            percent: Number(row.percent),
+            price: Number(row.underlyingPrice),
+            total,
+            improvement: total - baseResult
+          };
+        }).filter((row) => Number.isFinite(row.percent) && Number.isFinite(row.improvement));
+        const zone = Math.max(0, Number(zonePercent || 0));
+        const inside = rows.filter((row) => Math.abs(row.percent) <= zone);
+        if (!inside.length) return null;
+        const lower = inside.filter((row) => row.percent <= 0);
+        const upper = inside.filter((row) => row.percent >= 0);
+        const focus = direction === 'bullish'
+          ? upper
+          : direction === 'bearish'
+          ? lower
+          : inside;
+        if (!focus.length) return null;
+        const avg = (items, key) => items.reduce((sum, row) => sum + row[key], 0) / Math.max(1, items.length);
+        const focusAvg = avg(focus, 'improvement');
+        const focusMin = Math.min(...focus.map((row) => row.improvement));
+        const insideMin = Math.min(...inside.map((row) => row.improvement));
+        const insideAvg = avg(inside, 'improvement');
+        const worstLoss = Math.max(0, -Math.min(...rows.map((row) => row.improvement)));
+        const upperAvg = upper.length ? avg(upper, 'improvement') : focusAvg;
+        const lowerAvg = lower.length ? avg(lower, 'improvement') : focusAvg;
+        const directionalReward = direction === 'bullish'
+          ? upperAvg - Math.max(0, -lowerAvg) * 0.35
+          : direction === 'bearish'
+          ? lowerAvg - Math.max(0, -upperAvg) * 0.35
+          : -Math.abs(upperAvg - lowerAvg) * 0.45;
+        const debit = -candidate.legs.reduce((sum, leg) => sum + inverseLegNet(leg), 0);
+        const contractCount = candidate.legs.reduce((sum, leg) => sum + Math.abs(Number(leg.quantity || 0)), 0);
+        const score = focusAvg * 1.15
+          + focusMin * 1.8
+          + insideMin * 0.65
+          + directionalReward
+          - worstLoss * 0.45
+          - Math.max(0, debit) * 0.03
+          - contractCount * 350;
+        return {
+          ...candidate,
+          insideMin,
+          insideAvg,
+          focusAvg,
+          worstLoss,
+          netDebit: debit,
+          contractCount,
+          score
+        };
+      }
+
+      async function searchInverseStrategies() {
+        if (!id) return;
+        setInverseSearching(true);
+        try {
+          const freshPayload = await requestJson(`/api/strategies/${id}?force=1`);
+          setPayload(freshPayload);
+          const freshStrategy = freshPayload.strategy;
+          const freshOptions = freshPayload.chain?.options || [];
+          const freshFixedLegs = makeFixedLegs(freshStrategy.legs);
+          const freshHistory = makeFixedHistory(freshStrategy.history);
+          const freshSpot = Number(freshPayload.calculation?.spot || freshStrategy.targetSpot || 0);
+          const freshBaseRowsByStrike = new Map();
+          for (const option of freshOptions) {
+            const strike = Number(option.strike);
+            if (!Number.isFinite(strike)) continue;
+            if (!freshBaseRowsByStrike.has(strike)) freshBaseRowsByStrike.set(strike, { strike, call: null, put: null });
+            const row = freshBaseRowsByStrike.get(strike);
+            if (option.optionType === 'CALL') row.call = option;
+            if (option.optionType === 'PUT') row.put = option;
+          }
+          const visibleSymbols = new Set(freshFixedLegs.map((leg) => String(leg.symbol || '').toUpperCase()).filter(Boolean));
+          const visibleStrikes = new Set(
+            freshOptions
+              .filter((option) => visibleSymbols.has(String(option.symbol || '').toUpperCase()))
+              .map((option) => Number(option.strike))
+              .filter(Number.isFinite)
+          );
+          const relevantRows = Array.from(freshBaseRowsByStrike.values())
+            .filter((row) => !visibleStrikes.size || visibleStrikes.has(Number(row.strike)))
+            .sort((a, b) => visibleStrikes.size
+              ? a.strike - b.strike
+              : Math.abs(a.strike - freshSpot) - Math.abs(b.strike - freshSpot)
+            )
+            .slice(0, 34)
+            .sort((a, b) => a.strike - b.strike);
+          if (!relevantRows.length || !(freshSpot > 0)) {
+            setInverseResults([]);
+            message.info('No hay bases disponibles para buscar oportunidades.');
+            return;
+          }
+
+          const baseSnapshot = calculateLocalStrategySnapshot({
+            strategy: { ...freshStrategy, legs: [], history: freshHistory },
+            options: freshOptions,
+            spot: freshSpot
+          });
+          const candidates = buildInverseCandidates(relevantRows);
+          const direction = inverseStrategy.direction || 'lateral';
+          const zonePercent = Number(inverseStrategy.zonePercent ?? 10);
+          const scored = candidates
+            .map((candidate) => {
+              const candidateLegs = candidate.legs.map((leg, index) => ({
+                id: `inverse-${candidate.id}-${index + 1}`,
+                type: leg.type,
+                quantity: leg.quantity,
+                symbol: leg.symbol,
+                premium: leg.premium,
+                manualPrice: leg.manualPrice ?? leg.premium
+              }));
+              const candidateSnapshot = calculateLocalStrategySnapshot({
+                strategy: { ...freshStrategy, legs: candidateLegs, history: freshHistory },
+                options: freshOptions,
+                spot: freshSpot
+              });
+              return scoreOpportunityCandidate({ ...candidate, legs: candidateLegs }, baseSnapshot, candidateSnapshot, direction, zonePercent);
+            })
+            .filter(Boolean)
+            .filter((candidate) => candidate.focusAvg > 0 || candidate.insideMin > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 8)
+            .map((candidate, index) => ({
+              ...candidate,
+              rank: index + 1,
+              name: inverseCandidateName(candidate.kind, candidate.legs)
+            }));
+          setInverseResults(scored);
+          if (!scored.length) message.info('No encontré oportunidades razonables con esa dirección/zona.');
+          else message.success('Precios actualizados y oportunidades calculadas.');
+        } catch (error) {
+          message.error(error.message);
+        } finally {
+          setInverseSearching(false);
         }
-        const targetGain = Math.max(0, Number(inverseStrategy.targetGain || 0));
-        const maxLoss = Math.max(0, Number(inverseStrategy.maxLoss || 0));
-        const min = Math.min(from, to);
-        const max = Math.max(from, to);
-        const baseFrom = Number(inverseStrategy.baseFrom);
-        const baseTo = Number(inverseStrategy.baseTo);
-        const hasBaseRange = baseFrom > 0 && baseTo > 0;
-        const minBase = hasBaseRange ? Math.min(baseFrom, baseTo) : min * 0.82;
-        const maxBase = hasBaseRange ? Math.max(baseFrom, baseTo) : max * 1.18;
-        const relevantRows = baseRows
-          .filter((row) => row.strike >= minBase && row.strike <= maxBase)
-          .slice(0, 28);
-        if (!relevantRows.length) {
-          message.info('No hay bases visibles para ese rango.');
-          return;
-        }
-        const candidates = buildInverseCandidates(relevantRows, inverseStrategy.shape);
-        const scored = candidates
-          .map((candidate) => scoreScaledInverseCandidate(candidate, simulationRows, from, to, targetGain, maxLoss))
-          .filter(Boolean)
-          .filter((candidate) => {
-            if (candidate.insideMin <= 0) return false;
-            if (targetGain > 0 && candidate.insideMin < targetGain * 0.55) return false;
-            if (maxLoss > 0 && candidate.worstLoss > maxLoss * 1.35) return false;
-            if (['hat', 'flat', 'curve'].includes(inverseStrategy.shape) && candidate.outsideMax > candidate.insideAvg * 1.05) return false;
-            return true;
-          })
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 6)
-          .map((candidate, index) => ({
-            ...candidate,
-            rank: index + 1,
-            name: inverseCandidateName(candidate.kind, candidate.legs)
-          }));
-        setInverseResults(scored);
-        if (!scored.length) message.info('No encontré combinaciones razonables con esas condiciones.');
       }
 
       function applyInverseStrategy(candidate) {
@@ -3352,7 +3387,7 @@
             quantity: candidateLeg.quantity,
             symbol,
             premium: candidateLeg.premium,
-            manualPrice: ''
+            manualPrice: candidateLeg.manualPrice ?? candidateLeg.premium
           };
         }
         strategy.legs = legs;
@@ -3641,10 +3676,10 @@
           ellipsis: true
         },
         {
-          title: 'x',
-          dataIndex: 'scale',
-          width: 42,
-          render: (value) => value || 1
+          title: 'Contr.',
+          dataIndex: 'contractCount',
+          width: 54,
+          render: (value) => formatNumber(value || 1, 0)
         },
         {
           title: 'Min rango',
@@ -3945,7 +3980,8 @@
                     <Button
                       size="small"
                       type="primary"
-                      onClick={() => message.info('Proximo paso: buscar oportunidades contra la cartera usando BID/ASK ejecutables.')}
+                      loading={inverseSearching}
+                      onClick={searchInverseStrategies}
                     >
                       Buscar oportunidades
                     </Button>
