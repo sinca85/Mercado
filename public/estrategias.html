@@ -3521,6 +3521,15 @@
         return row.quantity !== '' || row.symbol || row.premium !== '';
       }
 
+      function historyBaseSortValue(row) {
+        const symbol = String(row?.symbol || '').toUpperCase();
+        const contract = chainOptions.find((option) => option.symbol === symbol);
+        const strike = parseNumeric(contract?.strike);
+        if (strike !== null) return strike;
+        const match = symbol.match(/(\d+(?:[.,]\d+)?)/);
+        return parseNumeric(match?.[1]) ?? Number.MAX_SAFE_INTEGER;
+      }
+
       function visibleHistoryRows(type, strategyRows) {
         const rows = fixedHistory.filter((row) => row.type === type);
         const lastContentIndex = rows.reduce((lastIndex, row, index) => hasHistoryContent(row) ? index : lastIndex, -1);
@@ -3530,7 +3539,15 @@
           tableIndex: index,
           result: legResultById.get(row.id),
           grossPreview: historyGrossForRow(row)
-        }));
+        })).sort((a, b) => {
+          const aHasContent = hasHistoryContent(a);
+          const bHasContent = hasHistoryContent(b);
+          if (aHasContent !== bHasContent) return aHasContent ? -1 : 1;
+          if (!aHasContent && !bHasContent) return a.tableIndex - b.tableIndex;
+          const strikeDiff = historyBaseSortValue(a) - historyBaseSortValue(b);
+          if (strikeDiff !== 0) return strikeDiff;
+          return String(a.symbol || '').localeCompare(String(b.symbol || ''));
+        });
       }
 
       function historyGrossForRow(row) {
@@ -3892,24 +3909,26 @@
                 focusRequest={strategyGridFocus}
                 targetHighlights={bestTargetHighlights}
                 onTypeDoubleClick={(_row, rowIndex) => transferLegToHistory(rowIndex)}
-                quantityActions={isSimulationTradingMode ? (_value, row, rowIndex) => (
+                quantityActions={(_value, row, rowIndex) => (
                   <div className="quick-quantity-actions">
-                    <button
-                      type="button"
-                      className="quick-quantity-button buy"
-                      title="Comprar 5"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        quickTradeToHistory(rowIndex, 5);
-                      }}
-                    >
-                      ▲
-                    </button>
+                    {isSimulationTradingMode ? (
+                      <button
+                        type="button"
+                        className="quick-quantity-button buy"
+                        title="Comprar 5"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          quickTradeToHistory(rowIndex, 5);
+                        }}
+                      >
+                        ▲
+                      </button>
+                    ) : null}
                     <input
                       className="quick-quantity-input"
                       type="text"
@@ -3930,24 +3949,26 @@
                       }}
                       onChange={(event) => updateStrategyLegRow(rowIndex, { quantity: event.target.value })}
                     />
-                    <button
-                      type="button"
-                      className="quick-quantity-button sell"
-                      title="Vender 5"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        quickTradeToHistory(rowIndex, -5);
-                      }}
-                    >
-                      ▼
-                    </button>
+                    {isSimulationTradingMode ? (
+                      <button
+                        type="button"
+                        className="quick-quantity-button sell"
+                        title="Vender 5"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          quickTradeToHistory(rowIndex, -5);
+                        }}
+                      >
+                        ▼
+                      </button>
+                    ) : null}
                   </div>
-                ) : null}
+                )}
               />
             </section>
 

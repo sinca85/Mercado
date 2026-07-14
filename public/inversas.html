@@ -3282,13 +3282,16 @@
         if (!id) return;
         setInverseSearching(true);
         try {
-          const freshPayload = await requestJson(`/api/strategies/${id}?force=1`);
-          setPayload(freshPayload);
-          const freshStrategy = freshPayload.strategy;
-          const freshOptions = freshPayload.chain?.options || [];
+          const useSimulationData = Boolean(isSimulationTradingMode && simulationSpot);
+          const freshPayload = useSimulationData
+            ? payload
+            : await requestJson(`/api/strategies/${id}?force=1`);
+          if (!useSimulationData) setPayload(freshPayload);
+          const freshStrategy = useSimulationData ? strategy : freshPayload.strategy;
+          const freshOptions = useSimulationData ? chainOptions : (freshPayload.chain?.options || []);
           const freshFixedLegs = makeFixedLegs(freshStrategy.legs);
           const freshHistory = makeFixedHistory(freshStrategy.history);
-          const freshSpot = Number(freshPayload.calculation?.spot || freshStrategy.targetSpot || 0);
+          const freshSpot = Number(useSimulationData ? calculation.spot : (freshPayload.calculation?.spot || freshStrategy.targetSpot || 0));
           const freshBaseRowsByStrike = new Map();
           for (const option of freshOptions) {
             const strike = Number(option.strike);
@@ -3355,7 +3358,7 @@
             }));
           setInverseResults(scored);
           if (!scored.length) message.info('No encontré oportunidades razonables con esa dirección/zona.');
-          else message.success('Precios actualizados y oportunidades calculadas.');
+          else message.success(useSimulationData ? 'Oportunidades calculadas con BID/ASK simulado.' : 'Precios actualizados y oportunidades calculadas.');
         } catch (error) {
           message.error(error.message);
         } finally {
@@ -3549,6 +3552,15 @@
         return row.quantity !== '' || row.symbol || row.premium !== '';
       }
 
+      function historyBaseSortValue(row) {
+        const symbol = String(row?.symbol || '').toUpperCase();
+        const contract = chainOptions.find((option) => option.symbol === symbol);
+        const strike = parseNumeric(contract?.strike);
+        if (strike !== null) return strike;
+        const match = symbol.match(/(\d+(?:[.,]\d+)?)/);
+        return parseNumeric(match?.[1]) ?? Number.MAX_SAFE_INTEGER;
+      }
+
       function visibleHistoryRows(type, strategyRows) {
         const rows = fixedHistory.filter((row) => row.type === type);
         const lastContentIndex = rows.reduce((lastIndex, row, index) => hasHistoryContent(row) ? index : lastIndex, -1);
@@ -3558,7 +3570,15 @@
           tableIndex: index,
           result: legResultById.get(row.id),
           grossPreview: historyGrossForRow(row)
-        }));
+        })).sort((a, b) => {
+          const aHasContent = hasHistoryContent(a);
+          const bHasContent = hasHistoryContent(b);
+          if (aHasContent !== bHasContent) return aHasContent ? -1 : 1;
+          if (!aHasContent && !bHasContent) return a.tableIndex - b.tableIndex;
+          const strikeDiff = historyBaseSortValue(a) - historyBaseSortValue(b);
+          if (strikeDiff !== 0) return strikeDiff;
+          return String(a.symbol || '').localeCompare(String(b.symbol || ''));
+        });
       }
 
       function historyGrossForRow(row) {
