@@ -2427,6 +2427,17 @@
         message.success('Historial del dia limpiado.');
       }
 
+      function clearStrategyLoad() {
+        const legs = fixedLegs.map((leg) => ({
+          ...leg,
+          quantity: '',
+          manualPrice: ''
+        }));
+        strategy.legs = legs;
+        applyStrategyChange({ ...strategy, legs });
+        message.success('Carga de estrategia limpiada.');
+      }
+
       function mergeHistoryTrade(existingRow, trade) {
         const existingQuantity = parseNumeric(existingRow.quantity) ?? 0;
         const existingPremium = parseNumeric(existingRow.premium) ?? 0;
@@ -2503,6 +2514,57 @@
         strategy.history = nextStrategy.history;
         applyStrategyChange(nextStrategy);
         message.success(`${symbol} enviado al historial.`);
+      }
+
+      function transferAllStrategyToHistory() {
+        const history = makeFixedHistory(strategy.history);
+        const calls = history.filter((item) => item.type === 'CALL');
+        const puts = history.filter((item) => item.type === 'PUT');
+        const clearIndexes = new Set();
+        let transferredCount = 0;
+
+        for (const row of strategyRowsWithTarget) {
+          const originalIndex = originalIndexById.get(row?.id);
+          const quantity = parseNumeric(row?.quantity);
+          const symbol = String(row?.symbol || '').toUpperCase();
+          const premium = currentPremiumForLeg(row);
+          if (originalIndex === undefined || !(quantity !== null && quantity !== 0) || !symbol || !(premium > 0)) continue;
+
+          const targetRows = row.type === 'CALL' ? calls : puts;
+          const trade = { type: row.type, quantity, symbol, premium };
+          let targetIndex = targetRows.findIndex((item) => String(item.symbol || '').toUpperCase() === symbol);
+          if (targetIndex === -1) targetIndex = targetRows.findIndex((item) => !item.symbol && (item.quantity === '' || item.quantity === 0) && (item.premium === '' || item.premium === 0));
+          if (targetIndex === -1) {
+            targetRows.push({
+              id: `history-${row.type.toLowerCase()}-${targetRows.length + 1}`,
+              date: '',
+              type: row.type,
+              quantity: '',
+              symbol: '',
+              premium: '',
+              manualPrice: '',
+              realized: 0,
+              importIds: []
+            });
+            targetIndex = targetRows.length - 1;
+          }
+
+          targetRows[targetIndex] = mergeHistoryTrade(targetRows[targetIndex], trade);
+          clearIndexes.add(originalIndex);
+          transferredCount += 1;
+        }
+
+        if (!transferredCount) {
+          message.info('No hay cantidades cargadas para pasar al historial.');
+          return;
+        }
+
+        const legs = fixedLegs.map((leg, index) => clearIndexes.has(index) ? { ...leg, quantity: '', manualPrice: '' } : leg);
+        const historyNext = [...calls, ...puts];
+        strategy.legs = legs;
+        strategy.history = historyNext;
+        applyStrategyChange({ ...strategy, legs, history: historyNext });
+        message.success(`${transferredCount} filas enviadas al historial.`);
       }
 
       function quickTradeToHistory(rowIndex, quantity) {
@@ -3365,6 +3427,8 @@
                   />
                   <Button size="small" onClick={() => copyStrategyBlock('CALL')}>Copiar CALLS</Button>
                   <Button size="small" onClick={() => copyStrategyBlock('PUT')}>Copiar PUTS</Button>
+                  <Button size="small" onClick={transferAllStrategyToHistory}>A hist.</Button>
+                  <Button size="small" danger onClick={clearStrategyLoad}>Limpiar</Button>
                 </Space>
               </div>
               <SpreadsheetInputGrid
