@@ -2005,9 +2005,8 @@
       const [strategyGridFocus, setStrategyGridFocus] = useState(null);
       const [includeStrategyLoad, setIncludeStrategyLoad] = useState(true);
       const [inverseStrategy, setInverseStrategy] = useState({
-        direction: 'lateral',
-        targetPercent: 0,
-        zonePercent: 10
+        targetStrike: null,
+        amplitudePercent: 10
       });
       const [inverseResults, setInverseResults] = useState([]);
       const [inverseSearching, setInverseSearching] = useState(false);
@@ -3241,7 +3240,7 @@
         };
       }
 
-      function scoreOpportunityCandidate(candidate, baseSnapshot, candidateSnapshot, direction, targetPercent, zonePercent) {
+      function scoreOpportunityCandidate(candidate, baseSnapshot, candidateSnapshot, targetPrice, amplitudePercent) {
         const baseByPercent = new Map((baseSnapshot.percentScenarios || []).map((row) => [Number(row.percent), row]));
         const rows = (candidateSnapshot.percentScenarios || []).map((row) => {
           const baseRow = baseByPercent.get(Number(row.percent));
@@ -3254,39 +3253,46 @@
             improvement: total - baseResult
           };
         }).filter((row) => Number.isFinite(row.percent) && Number.isFinite(row.improvement));
-        const target = Number(targetPercent || 0);
-        const zone = Math.max(0, Number(zonePercent || 0));
-        const minPercent = Math.max(-30, target - zone);
-        const maxPercent = Math.min(30, target + zone);
-        const inside = rows.filter((row) => row.percent >= minPercent && row.percent <= maxPercent);
+        const target = Number(targetPrice || 0);
+        if (!(target > 0) || !rows.length) return null;
+        const amplitude = Math.max(0, Number(amplitudePercent || 0));
+        const minPrice = target * (1 - amplitude / 100);
+        const maxPrice = target * (1 + amplitude / 100);
+        const nearestTarget = rows.reduce((best, row) => {
+          if (!best) return row;
+          return Math.abs(row.price - target) < Math.abs(best.price - target) ? row : best;
+        }, null);
+        const inside = amplitude === 0
+          ? [nearestTarget]
+          : rows.filter((row) => row.price >= minPrice && row.price <= maxPrice);
         if (!inside.length) return null;
-        const lower = inside.filter((row) => row.percent <= target);
-        const upper = inside.filter((row) => row.percent >= target);
-        const focus = direction === 'bullish'
-          ? upper
-          : direction === 'bearish'
-          ? lower
-          : inside;
-        if (!focus.length) return null;
         const avg = (items, key) => items.reduce((sum, row) => sum + row[key], 0) / Math.max(1, items.length);
-        const focusAvg = avg(focus, 'improvement');
-        const focusMin = Math.min(...focus.map((row) => row.improvement));
+        const weighted = inside.reduce((acc, row) => {
+          const distance = amplitude === 0 ? 0 : Math.abs(row.price / target - 1) / (amplitude / 100);
+          const weight = Math.max(0.15, 1 - distance);
+          acc.total += row.total * weight;
+          acc.improvement += row.improvement * weight;
+          acc.weight += weight;
+          return acc;
+        }, { total: 0, improvement: 0, weight: 0 });
+        const targetTotal = nearestTarget.total;
+        const targetImprovement = nearestTarget.improvement;
+        const focusAvg = weighted.improvement / Math.max(1, weighted.weight);
+        const weightedTotalAvg = weighted.total / Math.max(1, weighted.weight);
         const insideMin = Math.min(...inside.map((row) => row.improvement));
         const insideAvg = avg(inside, 'improvement');
         const worstLoss = Math.max(0, -Math.min(...rows.map((row) => row.improvement)));
-        const upperAvg = upper.length ? avg(upper, 'improvement') : focusAvg;
-        const lowerAvg = lower.length ? avg(lower, 'improvement') : focusAvg;
-        const directionalReward = direction === 'bullish'
-          ? upperAvg - Math.max(0, -lowerAvg) * 0.35
-          : direction === 'bearish'
-          ? lowerAvg - Math.max(0, -upperAvg) * 0.35
-          : -Math.abs(upperAvg - lowerAvg) * 0.45;
+        const outside = rows.filter((row) => !inside.includes(row));
+        const outsideBest = outside.length ? Math.max(...outside.map((row) => row.total)) : targetTotal;
+        const peakReward = targetTotal - outsideBest;
         const debit = -candidate.legs.reduce((sum, leg) => sum + inverseLegNet(leg), 0);
         const contractCount = candidate.legs.reduce((sum, leg) => sum + Math.abs(Number(leg.quantity || 0)), 0);
-        const score = focusAvg * 1.15
-          + focusMin * 1.8
+        const score = targetTotal * 1.65
+          + weightedTotalAvg * 0.85
+          + targetImprovement * 0.75
+          + focusAvg * 0.65
           + insideMin * 0.65
-          + directionalReward
+          + peakReward * 0.9
           - worstLoss * 0.45
           - Math.max(0, debit) * 0.03
           - contractCount * 350;
@@ -3298,9 +3304,11 @@
           worstLoss,
           netDebit: debit,
           contractCount,
-          targetPercent: target,
-          minPercent,
-          maxPercent,
+          targetPrice: target,
+          minPrice,
+          maxPrice,
+          targetTotal,
+          targetImprovement,
           score
         };
       }
@@ -3358,9 +3366,15 @@
           const candidateScales = hasPortfolio ? [1, 2, 3, 4, 5] : [1];
           const candidates = buildInverseCandidates(relevantRows)
             .flatMap((candidate) => candidateScales.map((scale) => scaleOpportunityCandidate(candidate, scale)));
-          const direction = inverseStrategy.direction || 'lateral';
-          const targetPercent = Number(inverseStrategy.targetPercent ?? 0);
-          const zonePercent = Number(inverseStrategy.zonePercent ?? 10);
+          const selectedTargetStrike = Number(inverseStrategy.targetStrike);
+          const targetStrike = Number.isFinite(selectedTargetStrike) && selectedTargetStrike > 0
+            ? selectedTargetStrike
+            : relevantRows.reduce((best, row) => {
+                if (!row.call) return best;
+                if (!best) return row.strike;
+                return Math.abs(row.strike - freshSpot) < Math.abs(best - freshSpot) ? row.strike : best;
+              }, null);
+          const amplitudePercent = Number(inverseStrategy.amplitudePercent ?? 10);
           const scored = candidates
             .map((candidate) => {
               const candidateLegs = candidate.legs.map((leg, index) => ({
@@ -3376,19 +3390,19 @@
                 options: freshOptions,
                 spot: freshSpot
               });
-              return scoreOpportunityCandidate({ ...candidate, legs: candidateLegs }, baseSnapshot, candidateSnapshot, direction, targetPercent, zonePercent);
+              return scoreOpportunityCandidate({ ...candidate, legs: candidateLegs }, baseSnapshot, candidateSnapshot, targetStrike, amplitudePercent);
             })
             .filter(Boolean)
-            .filter((candidate) => candidate.focusAvg > 0 || candidate.insideMin > 0)
+            .filter((candidate) => candidate.targetTotal > 0 || candidate.targetImprovement > 0 || candidate.insideMin > 0)
             .sort((a, b) => b.score - a.score)
             .slice(0, 8)
             .map((candidate, index) => ({
               ...candidate,
               rank: index + 1,
               name: inverseCandidateName(candidate.kind, candidate.legs)
-            }));
+          }));
           setInverseResults(scored);
-          if (!scored.length) message.info('No encontré oportunidades razonables con esa dirección/zona.');
+          if (!scored.length) message.info('No encontré oportunidades razonables para ese target/amplitud.');
           else message.success(useSimulationData ? 'Oportunidades calculadas con BID/ASK simulado.' : 'Precios actualizados y oportunidades calculadas.');
         } catch (error) {
           message.error(error.message);
@@ -3492,18 +3506,17 @@
         value: Number(row.underlyingPrice),
         label: `${formatNumber(row.underlyingPrice, 2)} (${row.percent > 0 ? '+' : ''}${row.percent}%)`
       }));
-      const inverseTargetOptions = Array.from({ length: 31 }, (_item, index) => {
-        const percent = -30 + index * 2;
-        return {
-          value: percent,
-          label: `${percent > 0 ? '+' : ''}${percent}%`
-        };
-      });
-      const inverseZoneOptions = Array.from({ length: 16 }, (_item, index) => {
+      const inverseTargetOptions = baseRows
+        .filter((row) => row.call)
+        .map((row) => ({
+          value: Number(row.strike),
+          label: `${row.call.symbol} | ${formatNumber(row.strike, 0)}`
+        }));
+      const inverseAmplitudeOptions = Array.from({ length: 16 }, (_item, index) => {
         const percent = index * 2;
         return {
           value: percent,
-          label: `±${percent}%`
+          label: `${percent}%`
         };
       });
       const legColumns = [
@@ -4012,34 +4025,25 @@
                 <div className="inverse-strategy-title">Detector de oportunidades</div>
                 <div className="inverse-strategy-grid">
                   <div className="inverse-strategy-field">
-                    <label>Direccion</label>
-                    <Select
-                      size="small"
-                      value={inverseStrategy.direction}
-                      options={[
-                        { value: 'lateral', label: 'Lateral' },
-                        { value: 'bullish', label: 'Alcista' },
-                        { value: 'bearish', label: 'Bajista' }
-                      ]}
-                      onChange={(direction) => setInverseStrategy((current) => ({ ...current, direction }))}
-                    />
-                  </div>
-                  <div className="inverse-strategy-field">
                     <label>Target</label>
                     <Select
                       size="small"
-                      value={inverseStrategy.targetPercent}
+                      showSearch
+                      allowClear
+                      placeholder="Base CALL"
+                      value={inverseStrategy.targetStrike ?? undefined}
                       options={inverseTargetOptions}
-                      onChange={(targetPercent) => setInverseStrategy((current) => ({ ...current, targetPercent }))}
+                      optionFilterProp="label"
+                      onChange={(targetStrike) => setInverseStrategy((current) => ({ ...current, targetStrike: targetStrike ?? null }))}
                     />
                   </div>
                   <div className="inverse-strategy-field">
-                    <label>Zona</label>
+                    <label>Amplitud</label>
                     <Select
                       size="small"
-                      value={inverseStrategy.zonePercent}
-                      options={inverseZoneOptions}
-                      onChange={(zonePercent) => setInverseStrategy((current) => ({ ...current, zonePercent }))}
+                      value={inverseStrategy.amplitudePercent}
+                      options={inverseAmplitudeOptions}
+                      onChange={(amplitudePercent) => setInverseStrategy((current) => ({ ...current, amplitudePercent }))}
                     />
                   </div>
                   <div className="inverse-strategy-field">
