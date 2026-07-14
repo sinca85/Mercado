@@ -2002,6 +2002,8 @@
       const [inverseStrategy, setInverseStrategy] = useState({
         from: null,
         to: null,
+        baseFrom: null,
+        baseTo: null,
         targetGain: null,
         maxLoss: null,
         shape: 'hat'
@@ -3264,8 +3266,13 @@
         const maxLoss = Math.max(0, Number(inverseStrategy.maxLoss || 0));
         const min = Math.min(from, to);
         const max = Math.max(from, to);
+        const baseFrom = Number(inverseStrategy.baseFrom);
+        const baseTo = Number(inverseStrategy.baseTo);
+        const hasBaseRange = baseFrom > 0 && baseTo > 0;
+        const minBase = hasBaseRange ? Math.min(baseFrom, baseTo) : min * 0.82;
+        const maxBase = hasBaseRange ? Math.max(baseFrom, baseTo) : max * 1.18;
         const relevantRows = baseRows
-          .filter((row) => row.strike >= min * 0.82 && row.strike <= max * 1.18)
+          .filter((row) => row.strike >= minBase && row.strike <= maxBase)
           .slice(0, 28);
         if (!relevantRows.length) {
           message.info('No hay bases visibles para ese rango.');
@@ -3926,6 +3933,32 @@
                       options={inversePriceOptions}
                       optionFilterProp="label"
                       onChange={(to) => setInverseStrategy((current) => ({ ...current, to: to ?? null }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Bases desde</label>
+                    <Select
+                      size="small"
+                      showSearch
+                      allowClear
+                      value={inverseStrategy.baseFrom ?? undefined}
+                      placeholder="Base"
+                      options={rangeBaseOptions}
+                      optionFilterProp="label"
+                      onChange={(baseFrom) => setInverseStrategy((current) => ({ ...current, baseFrom: baseFrom ?? null }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Bases hasta</label>
+                    <Select
+                      size="small"
+                      showSearch
+                      allowClear
+                      value={inverseStrategy.baseTo ?? undefined}
+                      placeholder="Base"
+                      options={rangeBaseOptions}
+                      optionFilterProp="label"
+                      onChange={(baseTo) => setInverseStrategy((current) => ({ ...current, baseTo: baseTo ?? null }))}
                     />
                   </div>
                   <div className="inverse-strategy-field">
