@@ -2006,6 +2006,7 @@
       const [includeStrategyLoad, setIncludeStrategyLoad] = useState(true);
       const [inverseStrategy, setInverseStrategy] = useState({
         direction: 'lateral',
+        targetPercent: 0,
         zonePercent: 10
       });
       const [inverseResults, setInverseResults] = useState([]);
@@ -2554,7 +2555,7 @@
         const originalIndex = originalIndexById.get(row?.id);
         const quantity = parseNumeric(row?.quantity);
         const symbol = String(row?.symbol || '').toUpperCase();
-        const premium = currentPremiumForLeg(row);
+        const premium = executionPremiumForLeg(row);
         if (!(quantity !== null && quantity !== 0) || !symbol || !(premium > 0)) {
           message.info('Completá cantidad, base y prima para pasar al historial.');
           return;
@@ -2600,7 +2601,7 @@
           const originalIndex = originalIndexById.get(row?.id);
           const quantity = parseNumeric(row?.quantity);
           const symbol = String(row?.symbol || '').toUpperCase();
-          const premium = currentPremiumForLeg(row);
+          const premium = executionPremiumForLeg(row);
           if (originalIndex === undefined || !(quantity !== null && quantity !== 0) || !symbol || !(premium > 0)) continue;
 
           const targetRows = row.type === 'CALL' ? calls : puts;
@@ -2988,6 +2989,16 @@
         return marketPremiumForLeg(leg) ?? parseNumeric(leg.premium);
       }
 
+      function executionPremiumForLeg(leg) {
+        const manualPrice = parseNumeric(leg?.manualPrice);
+        if (manualPrice !== null) return manualPrice;
+        const quantity = parseNumeric(leg?.quantity);
+        const contract = contractForLeg(leg);
+        if (quantity !== null && quantity > 0) return parseNumeric(contract?.ask) ?? currentPremiumForLeg(leg);
+        if (quantity !== null && quantity < 0) return parseNumeric(contract?.bid) ?? currentPremiumForLeg(leg);
+        return currentPremiumForLeg(leg);
+      }
+
       function marketPremiumForLeg(leg) {
         const contract = contractForLeg(leg);
         return parseNumeric(leg.result?.currentPrice)
@@ -3220,7 +3231,17 @@
         return candidates;
       }
 
-      function scoreOpportunityCandidate(candidate, baseSnapshot, candidateSnapshot, direction, zonePercent) {
+      function scaleOpportunityCandidate(candidate, scale) {
+        const multiplier = Math.max(1, Math.trunc(Number(scale) || 1));
+        return {
+          ...candidate,
+          id: `${candidate.id}-x${multiplier}`,
+          kind: multiplier > 1 ? `${candidate.kind} x${multiplier}` : candidate.kind,
+          legs: candidate.legs.map((leg) => ({ ...leg, quantity: leg.quantity * multiplier }))
+        };
+      }
+
+      function scoreOpportunityCandidate(candidate, baseSnapshot, candidateSnapshot, direction, targetPercent, zonePercent) {
         const baseByPercent = new Map((baseSnapshot.percentScenarios || []).map((row) => [Number(row.percent), row]));
         const rows = (candidateSnapshot.percentScenarios || []).map((row) => {
           const baseRow = baseByPercent.get(Number(row.percent));
@@ -3233,11 +3254,14 @@
             improvement: total - baseResult
           };
         }).filter((row) => Number.isFinite(row.percent) && Number.isFinite(row.improvement));
+        const target = Number(targetPercent || 0);
         const zone = Math.max(0, Number(zonePercent || 0));
-        const inside = rows.filter((row) => Math.abs(row.percent) <= zone);
+        const minPercent = Math.max(-30, target - zone);
+        const maxPercent = Math.min(30, target + zone);
+        const inside = rows.filter((row) => row.percent >= minPercent && row.percent <= maxPercent);
         if (!inside.length) return null;
-        const lower = inside.filter((row) => row.percent <= 0);
-        const upper = inside.filter((row) => row.percent >= 0);
+        const lower = inside.filter((row) => row.percent <= target);
+        const upper = inside.filter((row) => row.percent >= target);
         const focus = direction === 'bullish'
           ? upper
           : direction === 'bearish'
@@ -3274,6 +3298,9 @@
           worstLoss,
           netDebit: debit,
           contractCount,
+          targetPercent: target,
+          minPercent,
+          maxPercent,
           score
         };
       }
@@ -3327,8 +3354,12 @@
             options: freshOptions,
             spot: freshSpot
           });
-          const candidates = buildInverseCandidates(relevantRows);
+          const hasPortfolio = freshHistory.some((row) => hasHistoryContent(row));
+          const candidateScales = hasPortfolio ? [1, 2, 3, 4, 5] : [1];
+          const candidates = buildInverseCandidates(relevantRows)
+            .flatMap((candidate) => candidateScales.map((scale) => scaleOpportunityCandidate(candidate, scale)));
           const direction = inverseStrategy.direction || 'lateral';
+          const targetPercent = Number(inverseStrategy.targetPercent ?? 0);
           const zonePercent = Number(inverseStrategy.zonePercent ?? 10);
           const scored = candidates
             .map((candidate) => {
@@ -3345,7 +3376,7 @@
                 options: freshOptions,
                 spot: freshSpot
               });
-              return scoreOpportunityCandidate({ ...candidate, legs: candidateLegs }, baseSnapshot, candidateSnapshot, direction, zonePercent);
+              return scoreOpportunityCandidate({ ...candidate, legs: candidateLegs }, baseSnapshot, candidateSnapshot, direction, targetPercent, zonePercent);
             })
             .filter(Boolean)
             .filter((candidate) => candidate.focusAvg > 0 || candidate.insideMin > 0)
@@ -3461,6 +3492,13 @@
         value: Number(row.underlyingPrice),
         label: `${formatNumber(row.underlyingPrice, 2)} (${row.percent > 0 ? '+' : ''}${row.percent}%)`
       }));
+      const inverseTargetOptions = Array.from({ length: 31 }, (_item, index) => {
+        const percent = -30 + index * 2;
+        return {
+          value: percent,
+          label: `${percent > 0 ? '+' : ''}${percent}%`
+        };
+      });
       const inverseZoneOptions = Array.from({ length: 16 }, (_item, index) => {
         const percent = index * 2;
         return {
@@ -3984,6 +4022,15 @@
                         { value: 'bearish', label: 'Bajista' }
                       ]}
                       onChange={(direction) => setInverseStrategy((current) => ({ ...current, direction }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Target</label>
+                    <Select
+                      size="small"
+                      value={inverseStrategy.targetPercent}
+                      options={inverseTargetOptions}
+                      onChange={(targetPercent) => setInverseStrategy((current) => ({ ...current, targetPercent }))}
                     />
                   </div>
                   <div className="inverse-strategy-field">
