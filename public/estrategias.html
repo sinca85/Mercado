@@ -2013,6 +2013,7 @@
       const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
       const [strategyRange, setStrategyRange] = useState({ from: null, to: null });
       const [strategyGridFocus, setStrategyGridFocus] = useState(null);
+      const [includeStrategyLoad, setIncludeStrategyLoad] = useState(true);
       const [inverseStrategy, setInverseStrategy] = useState({
         from: null,
         to: null,
@@ -2446,14 +2447,24 @@
       const chainOptions = shouldSimulateChain
         ? simulateOptionChain(rawChainOptions, simulationSpot, strategy, simulatedNow)
         : rawChainOptions;
+      const calculationLegs = includeStrategyLoad
+        ? fixedLegs
+        : fixedLegs.map((leg) => ({ ...leg, quantity: '', manualPrice: '' }));
       const calculation = simulationSpot
         ? calculateLocalStrategySnapshot({
-            strategy: { ...strategy, legs: fixedLegs, history: fixedHistory },
+            strategy: { ...strategy, legs: calculationLegs, history: fixedHistory },
             options: chainOptions,
             spot: simulationSpot,
             simulatedNow
           })
-        : payload.calculation;
+        : includeStrategyLoad
+        ? payload.calculation
+        : calculateLocalStrategySnapshot({
+            strategy: { ...strategy, legs: calculationLegs, history: fixedHistory },
+            options: chainOptions,
+            spot: payload.calculation?.spot || strategy.targetSpot || 0,
+            simulatedNow
+          });
       if (strategy.legs.length !== fixedLegs.length || strategy.legs.some((leg, index) => leg.id !== fixedLegs[index].id || leg.type !== fixedLegs[index].type)) {
         strategy.legs = fixedLegs;
       }
@@ -3834,6 +3845,18 @@
                   <Button size="small" onClick={() => copyStrategyBlock('PUT')}>Copiar PUTS</Button>
                   <Button size="small" onClick={transferAllStrategyToHistory}>A hist.</Button>
                   <Button size="small" danger onClick={clearStrategyLoad}>Limpiar</Button>
+                  <Tooltip title="Comparar resultados con o sin la carga de estrategia">
+                    <Space size={4}>
+                      <span className="muted">Carga</span>
+                      <Switch
+                        size="small"
+                        checked={includeStrategyLoad}
+                        checkedChildren="On"
+                        unCheckedChildren="Off"
+                        onChange={setIncludeStrategyLoad}
+                      />
+                    </Space>
+                  </Tooltip>
                 </Space>
               </div>
               <SpreadsheetInputGrid
