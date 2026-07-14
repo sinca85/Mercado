@@ -3354,16 +3354,22 @@
         const tailRetention = Math.max(0, postAvg);
         const debit = -candidate.legs.reduce((sum, leg) => sum + inverseLegNet(leg), 0);
         const contractCount = candidate.legs.reduce((sum, leg) => sum + Math.abs(Number(leg.quantity || 0)), 0);
-        const score = targetTotal * 1.65
+        const maxLossAdjustedTarget = targetTotal - worstLoss;
+        const riskEfficiency = targetTotal > 0
+          ? targetTotal / Math.max(1, worstLoss || Math.max(1, Math.max(0, debit)))
+          : 0;
+        const score = targetTotal * 1.55
           + weightedTotalAvg * 0.85
-          + targetImprovement * 0.75
+          + targetImprovement * 0.9
           + focusAvg * 0.65
           + insideMin * 0.65
+          + maxLossAdjustedTarget * 1.8
+          + riskEfficiency * 18000
           + peakReward * 1.2
           + tailRetention * 0.18
           + preAvg * 0.1
-          - worstLoss * 0.45
-          - Math.max(0, debit) * 0.03
+          - worstLoss * 1.15
+          - Math.max(0, debit) * 0.01
           - contractCount * 350;
         return {
           ...candidate,
@@ -3430,7 +3436,7 @@
             spot: freshSpot
           });
           const hasPortfolio = freshHistory.some((row) => hasHistoryContent(row));
-          const candidateScales = hasPortfolio ? [1, 2, 3, 4, 5] : [1];
+          const candidateScales = hasPortfolio ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : [1];
           const targetPercent = Number(inverseStrategy.targetPercent ?? 10);
           const targetPrice = freshSpot * (1 + targetPercent / 100);
           const targetStrike = relevantRows.reduce((best, row) => {
