@@ -2006,7 +2006,8 @@
       const [includeStrategyLoad, setIncludeStrategyLoad] = useState(true);
       const [inverseStrategy, setInverseStrategy] = useState({
         targetStrike: null,
-        amplitudePercent: 10
+        amplitudePercent: 10,
+        figure: 'all'
       });
       const [inverseResults, setInverseResults] = useState([]);
       const [inverseSearching, setInverseSearching] = useState(false);
@@ -3186,7 +3187,7 @@
           : legs;
       }
 
-      function buildInverseCandidates(relevantRows) {
+      function buildInverseCandidates(relevantRows, figure = 'all', targetStrike = null) {
         const candidates = [];
         const calls = relevantRows.map((row) => row.call).filter(Boolean);
         const puts = relevantRows.map((row) => row.put).filter(Boolean);
@@ -3204,6 +3205,74 @@
           if (candidates.some((candidate) => candidate.key === key)) return;
           candidates.push({ id: `${kind}-${candidates.length + 1}`, key, kind, legs: normalizedLegs });
         };
+        const allows = (...figures) => figure === 'all' || figures.includes(figure);
+        const targetRow = relevantRows
+          .filter((row) => row.call || row.put)
+          .reduce((best, row) => {
+            if (!best) return row;
+            return Math.abs(Number(row.strike) - Number(targetStrike)) < Math.abs(Number(best.strike) - Number(targetStrike)) ? row : best;
+          }, null);
+        const lowerRows = relevantRows.filter((row) => Number(row.strike) < Number(targetRow?.strike)).sort((a, b) => b.strike - a.strike).slice(0, 8);
+        const upperRows = relevantRows.filter((row) => Number(row.strike) > Number(targetRow?.strike)).sort((a, b) => a.strike - b.strike).slice(0, 8);
+
+        if (targetRow?.call && targetRow?.put) {
+          if (allows('short-straddle')) {
+            addCandidate('Short straddle', [inverseLegFromOption(targetRow.call, -1), inverseLegFromOption(targetRow.put, -1)]);
+          }
+          if (allows('long-straddle')) {
+            addCandidate('Long straddle', [inverseLegFromOption(targetRow.call, 1), inverseLegFromOption(targetRow.put, 1)]);
+          }
+          if (allows('iron-butterfly')) {
+            for (const lower of lowerRows.filter((row) => row.put).slice(0, 5)) {
+              for (const upper of upperRows.filter((row) => row.call).slice(0, 5)) {
+                addCandidate(`Iron butterfly ${formatNumber(targetRow.strike, 0)}`, [
+                  inverseLegFromOption(lower.put, 1),
+                  inverseLegFromOption(targetRow.put, -1),
+                  inverseLegFromOption(targetRow.call, -1),
+                  inverseLegFromOption(upper.call, 1)
+                ]);
+              }
+            }
+          }
+        }
+
+        if (allows('short-strangle', 'long-strangle')) {
+          for (const lower of lowerRows.filter((row) => row.put).slice(0, 6)) {
+            for (const upper of upperRows.filter((row) => row.call).slice(0, 6)) {
+              if (allows('short-strangle')) {
+                addCandidate('Short strangle', [inverseLegFromOption(lower.put, -1), inverseLegFromOption(upper.call, -1)]);
+              }
+              if (allows('long-strangle')) {
+                addCandidate('Long strangle', [inverseLegFromOption(lower.put, 1), inverseLegFromOption(upper.call, 1)]);
+              }
+            }
+          }
+        }
+
+        if (allows('iron-condor')) {
+          const lowerByStrikeAsc = relevantRows.filter((row) => row.put && Number(row.strike) < Number(targetRow?.strike)).sort((a, b) => a.strike - b.strike);
+          const upperByStrikeAsc = relevantRows.filter((row) => row.call && Number(row.strike) > Number(targetRow?.strike)).sort((a, b) => a.strike - b.strike);
+          const lowerSellRows = lowerRows.filter((row) => row.put).slice(0, 5);
+          const upperSellRows = upperRows.filter((row) => row.call).slice(0, 5);
+          for (const lowerSell of lowerSellRows) {
+            const lowerBuyRows = lowerByStrikeAsc.filter((row) => row.strike < lowerSell.strike).slice(-3);
+            for (const upperSell of upperSellRows) {
+              const upperBuyRows = upperByStrikeAsc.filter((row) => row.strike > upperSell.strike).slice(0, 3);
+              for (const lowerBuy of lowerBuyRows) {
+                for (const upperBuy of upperBuyRows) {
+                  addCandidate('Iron condor', [
+                    inverseLegFromOption(lowerBuy.put, 1),
+                    inverseLegFromOption(lowerSell.put, -1),
+                    inverseLegFromOption(upperSell.call, -1),
+                    inverseLegFromOption(upperBuy.call, 1)
+                  ]);
+                }
+              }
+            }
+          }
+        }
+
+        if (!allows('vertical-ratio')) return candidates;
 
         for (const list of [calls, puts]) {
           for (let i = 0; i < list.length; i += 1) {
@@ -3364,8 +3433,6 @@
           });
           const hasPortfolio = freshHistory.some((row) => hasHistoryContent(row));
           const candidateScales = hasPortfolio ? [1, 2, 3, 4, 5] : [1];
-          const candidates = buildInverseCandidates(relevantRows)
-            .flatMap((candidate) => candidateScales.map((scale) => scaleOpportunityCandidate(candidate, scale)));
           const selectedTargetStrike = Number(inverseStrategy.targetStrike);
           const targetStrike = Number.isFinite(selectedTargetStrike) && selectedTargetStrike > 0
             ? selectedTargetStrike
@@ -3374,6 +3441,8 @@
                 if (!best) return row.strike;
                 return Math.abs(row.strike - freshSpot) < Math.abs(best - freshSpot) ? row.strike : best;
               }, null);
+          const candidates = buildInverseCandidates(relevantRows, inverseStrategy.figure || 'all', targetStrike)
+            .flatMap((candidate) => candidateScales.map((scale) => scaleOpportunityCandidate(candidate, scale)));
           const amplitudePercent = Number(inverseStrategy.amplitudePercent ?? 10);
           const scored = candidates
             .map((candidate) => {
@@ -3519,6 +3588,16 @@
           label: `${percent}%`
         };
       });
+      const inverseFigureOptions = [
+        { value: 'all', label: 'Todas' },
+        { value: 'short-straddle', label: 'Short straddle' },
+        { value: 'long-straddle', label: 'Long straddle' },
+        { value: 'short-strangle', label: 'Short strangle' },
+        { value: 'long-strangle', label: 'Long strangle' },
+        { value: 'iron-butterfly', label: 'Iron butterfly' },
+        { value: 'iron-condor', label: 'Iron condor' },
+        { value: 'vertical-ratio', label: 'Vertical/ratio' }
+      ];
       const legColumns = [
         {
           title: 'TIPO',
@@ -4044,6 +4123,15 @@
                       value={inverseStrategy.amplitudePercent}
                       options={inverseAmplitudeOptions}
                       onChange={(amplitudePercent) => setInverseStrategy((current) => ({ ...current, amplitudePercent }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Figura</label>
+                    <Select
+                      size="small"
+                      value={inverseStrategy.figure}
+                      options={inverseFigureOptions}
+                      onChange={(figure) => setInverseStrategy((current) => ({ ...current, figure }))}
                     />
                   </div>
                   <div className="inverse-strategy-field">
