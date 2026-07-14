@@ -3078,6 +3078,15 @@
         return `${kind}: ${parts.join(' / ')}`;
       }
 
+      function scaleInverseCandidate(candidate, scale) {
+        const multiplier = Math.max(1, Math.min(200, Number(scale) || 1));
+        return {
+          ...candidate,
+          legs: candidate.legs.map((leg) => ({ ...leg, quantity: leg.quantity * multiplier })),
+          scale: multiplier
+        };
+      }
+
       function evaluateInverseCandidate(candidate, rows, from, to, targetGain, maxLoss) {
         const min = Math.min(from, to);
         const max = Math.max(from, to);
@@ -3093,12 +3102,20 @@
         const outsideMin = outside.length ? Math.min(...outside.map((row) => row.result)) : insideMin;
         const worstLoss = Math.max(0, -Math.min(...results.map((row) => row.result)));
         const netDebit = -candidate.legs.reduce((sum, leg) => sum + inverseLegNet(leg), 0);
-        const targetPenalty = targetGain > 0 ? Math.max(0, targetGain - insideMin) * 1.9 + Math.abs(insideAvg - targetGain) * 0.16 : 0;
-        const lossPenalty = maxLoss > 0 ? Math.max(0, worstLoss - maxLoss) * 2.2 : worstLoss * 0.12;
-        const shapePenalty = candidate.shapeBonus || 0;
-        const edgeReward = insideMin * 1.2 + insideAvg * 0.35 + outsideMin * 0.18;
-        const costPenalty = Math.max(0, netDebit) * 0.05;
-        const score = edgeReward - targetPenalty - lossPenalty - costPenalty + shapePenalty;
+        const targetMiss = targetGain > 0 ? Math.max(0, targetGain - insideMin) : 0;
+        const targetOvershoot = targetGain > 0 ? Math.max(0, insideAvg - targetGain * 1.8) : 0;
+        const lossOver = maxLoss > 0 ? Math.max(0, worstLoss - maxLoss) : 0;
+        const outsideReward = Math.min(0, outsideMin) * 0.25;
+        const shapeReward = candidate.shapeBonus || 0;
+        const score = insideMin * 2.2
+          + insideAvg * 0.45
+          + outsideReward
+          + shapeReward
+          - targetMiss * 3.5
+          - targetOvershoot * 0.35
+          - lossOver * 4
+          - worstLoss * 0.22
+          - Math.max(0, netDebit) * 0.06;
         return {
           ...candidate,
           insideMin,
@@ -3108,6 +3125,25 @@
           netDebit,
           score
         };
+      }
+
+      function scoreScaledInverseCandidate(candidate, rows, from, to, targetGain, maxLoss) {
+        const unit = evaluateInverseCandidate(candidate, rows, from, to, 0, 0);
+        if (!unit || !(unit.insideAvg > 0 || unit.insideMin > 0)) return null;
+        const scaleBase = targetGain > 0 ? Math.max(unit.insideMin, unit.insideAvg * 0.72, 1) : Math.max(unit.insideAvg, 1);
+        const desiredScale = targetGain > 0 ? Math.max(1, Math.round(targetGain / scaleBase)) : 1;
+        const scaleOptions = Array.from(new Set([
+          1,
+          desiredScale - 2,
+          desiredScale - 1,
+          desiredScale,
+          desiredScale + 1,
+          desiredScale + 2
+        ].filter((value) => value >= 1 && value <= 200)));
+        return scaleOptions
+          .map((scale) => evaluateInverseCandidate(scaleInverseCandidate(candidate, scale), rows, from, to, targetGain, maxLoss))
+          .filter(Boolean)
+          .sort((a, b) => b.score - a.score)[0] || null;
       }
 
       function buildInverseCandidates(relevantRows, shape) {
@@ -3191,9 +3227,14 @@
         }
         const candidates = buildInverseCandidates(relevantRows, inverseStrategy.shape);
         const scored = candidates
-          .map((candidate) => evaluateInverseCandidate(candidate, simulationRows, from, to, targetGain, maxLoss))
+          .map((candidate) => scoreScaledInverseCandidate(candidate, simulationRows, from, to, targetGain, maxLoss))
           .filter(Boolean)
-          .filter((candidate) => candidate.insideMin > 0 || candidate.insideAvg > targetGain * 0.7)
+          .filter((candidate) => {
+            if (candidate.insideMin <= 0) return false;
+            if (targetGain > 0 && candidate.insideMin < targetGain * 0.55) return false;
+            if (maxLoss > 0 && candidate.worstLoss > maxLoss * 1.35) return false;
+            return true;
+          })
           .sort((a, b) => b.score - a.score)
           .slice(0, 6)
           .map((candidate, index) => ({
@@ -3503,6 +3544,12 @@
           title: 'Estrategia',
           dataIndex: 'name',
           ellipsis: true
+        },
+        {
+          title: 'x',
+          dataIndex: 'scale',
+          width: 42,
+          render: (value) => value || 1
         },
         {
           title: 'Min rango',
