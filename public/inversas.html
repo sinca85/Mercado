@@ -2013,7 +2013,7 @@
         maxLoss: null,
         shape: 'hat',
         direction: 'lateral',
-        targetPercent: 0
+        zonePercent: 10
       });
       const [inverseResults, setInverseResults] = useState([]);
       const [simulation, setSimulation] = useState({ active: false, paused: false, spot: null, previousSpot: null, initialSpot: null, simulatedNow: null, step: 0, totalSteps: 0 });
@@ -3423,11 +3423,11 @@
         value: Number(row.underlyingPrice),
         label: `${formatNumber(row.underlyingPrice, 2)} (${row.percent > 0 ? '+' : ''}${row.percent}%)`
       }));
-      const inversePercentOptions = Array.from({ length: 31 }, (_item, index) => {
-        const percent = -30 + index * 2;
+      const inverseZoneOptions = Array.from({ length: 16 }, (_item, index) => {
+        const percent = index * 2;
         return {
           value: percent,
-          label: `${percent > 0 ? '+' : ''}${percent}%`
+          label: `±${percent}%`
         };
       });
       const legColumns = [
@@ -3880,6 +3880,29 @@
                 focusRequest={strategyGridFocus}
                 targetHighlights={bestTargetHighlights}
                 onTypeDoubleClick={(_row, rowIndex) => transferLegToHistory(rowIndex)}
+                columnWidths={{ quantity: 70 }}
+                quantityActions={(_value, row, rowIndex) => (
+                  <input
+                    className="quick-quantity-input"
+                    type="text"
+                    inputMode="decimal"
+                    value={row.quantity ?? ''}
+                    title="Cantidad"
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onDoubleClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onChange={(event) => updateStrategyLegRow(rowIndex, { quantity: event.target.value })}
+                  />
+                )}
               />
             </section>
 
@@ -3912,9 +3935,9 @@
                     <label>Zona</label>
                     <Select
                       size="small"
-                      value={inverseStrategy.targetPercent}
-                      options={inversePercentOptions}
-                      onChange={(targetPercent) => setInverseStrategy((current) => ({ ...current, targetPercent }))}
+                      value={inverseStrategy.zonePercent}
+                      options={inverseZoneOptions}
+                      onChange={(zonePercent) => setInverseStrategy((current) => ({ ...current, zonePercent }))}
                     />
                   </div>
                   <div className="inverse-strategy-field">
