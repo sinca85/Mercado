@@ -238,6 +238,40 @@
     .symbol { color: var(--blue); font-weight: 900; }
     .payoff-wrap { padding: 10px; }
 
+    .inverse-strategy-panel {
+      margin-top: 10px;
+      padding: 10px;
+      border-top: 1px solid var(--line);
+      background: #141d2a;
+    }
+
+    .inverse-strategy-title {
+      margin-bottom: 8px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .inverse-strategy-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .inverse-strategy-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .inverse-strategy-field label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
     .history-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(360px, 1fr));
@@ -1950,6 +1984,13 @@
       const [focusedHistoryTarget, setFocusedHistoryTarget] = useState({ type: 'CALL', index: 0 });
       const [strategyRange, setStrategyRange] = useState({ from: null, to: null });
       const [strategyGridFocus, setStrategyGridFocus] = useState(null);
+      const [inverseStrategy, setInverseStrategy] = useState({
+        from: null,
+        to: null,
+        targetGain: null,
+        maxLoss: null,
+        shape: 'hat'
+      });
       const [simulation, setSimulation] = useState({ active: false, paused: false, spot: null, previousSpot: null, initialSpot: null, simulatedNow: null, step: 0, totalSteps: 0 });
       const recalcTimerRef = useRef(null);
       const simulationTimerRef = useRef(null);
@@ -3060,6 +3101,10 @@
       }
 
       const simulationRows = calculation.percentScenarios || [];
+      const inversePriceOptions = simulationRows.map((row) => ({
+        value: Number(row.underlyingPrice),
+        label: `${formatNumber(row.underlyingPrice, 2)} (${row.percent > 0 ? '+' : ''}${row.percent}%)`
+      }));
       const legColumns = [
         {
           title: 'TIPO',
@@ -3532,6 +3577,85 @@
                 columns={simulationColumns}
                 dataSource={simulationRows}
               />
+              <div className="inverse-strategy-panel">
+                <div className="inverse-strategy-title">Estrategia inversa</div>
+                <div className="inverse-strategy-grid">
+                  <div className="inverse-strategy-field">
+                    <label>Desde</label>
+                    <Select
+                      size="small"
+                      showSearch
+                      allowClear
+                      value={inverseStrategy.from ?? undefined}
+                      placeholder="Precio"
+                      options={inversePriceOptions}
+                      optionFilterProp="label"
+                      onChange={(from) => setInverseStrategy((current) => ({ ...current, from: from ?? null }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Hasta</label>
+                    <Select
+                      size="small"
+                      showSearch
+                      allowClear
+                      value={inverseStrategy.to ?? undefined}
+                      placeholder="Precio"
+                      options={inversePriceOptions}
+                      optionFilterProp="label"
+                      onChange={(to) => setInverseStrategy((current) => ({ ...current, to: to ?? null }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Ganancia objetivo</label>
+                    <InputNumber
+                      size="small"
+                      value={inverseStrategy.targetGain}
+                      step={1000}
+                      style={{ width: '100%' }}
+                      placeholder="Ej. 100000"
+                      onChange={(targetGain) => setInverseStrategy((current) => ({ ...current, targetGain }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Perdida maxima</label>
+                    <InputNumber
+                      size="small"
+                      value={inverseStrategy.maxLoss}
+                      min={0}
+                      step={1000}
+                      style={{ width: '100%' }}
+                      placeholder="Ej. 50000"
+                      onChange={(maxLoss) => setInverseStrategy((current) => ({ ...current, maxLoss }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Figura</label>
+                    <Select
+                      size="small"
+                      value={inverseStrategy.shape}
+                      options={[
+                        { value: 'hat', label: 'Galera' },
+                        { value: 'curve', label: 'Curva' },
+                        { value: 'ramp-up', label: 'Subida' },
+                        { value: 'ramp-down', label: 'Bajada' },
+                        { value: 'flat', label: 'Meseta' }
+                      ]}
+                      onChange={(shape) => setInverseStrategy((current) => ({ ...current, shape }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>&nbsp;</label>
+                    <Button
+                      size="small"
+                      type="primary"
+                      onClick={() => message.info('El solver inverso queda listo para conectar en el proximo paso.')}
+                    >
+                      Buscar
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </section>
 
             <section className="panel">
