@@ -3100,12 +3100,14 @@
         const insideMin = Math.min(...inside.map((row) => row.result));
         const insideAvg = inside.reduce((sum, row) => sum + row.result, 0) / inside.length;
         const outsideMin = outside.length ? Math.min(...outside.map((row) => row.result)) : insideMin;
+        const outsideAvg = outside.length ? outside.reduce((sum, row) => sum + row.result, 0) / outside.length : insideAvg;
+        const outsideMax = outside.length ? Math.max(...outside.map((row) => row.result)) : insideAvg;
         const worstLoss = Math.max(0, -Math.min(...results.map((row) => row.result)));
         const netDebit = -candidate.legs.reduce((sum, leg) => sum + inverseLegNet(leg), 0);
         const targetMiss = targetGain > 0 ? Math.max(0, targetGain - insideMin) : 0;
         const targetOvershoot = targetGain > 0 ? Math.max(0, insideAvg - targetGain * 1.8) : 0;
         const lossOver = maxLoss > 0 ? Math.max(0, worstLoss - maxLoss) : 0;
-        const outsideReward = Math.min(0, outsideMin) * 0.25;
+        const outsideReward = Math.min(0, outsideMin) * 0.25 - Math.max(0, outsideMax - insideAvg) * 1.1;
         const shapeReward = candidate.shapeBonus || 0;
         const score = insideMin * 2.2
           + insideAvg * 0.45
@@ -3121,6 +3123,8 @@
           insideMin,
           insideAvg,
           outsideMin,
+          outsideAvg,
+          outsideMax,
           worstLoss,
           netDebit,
           score
@@ -3233,6 +3237,7 @@
             if (candidate.insideMin <= 0) return false;
             if (targetGain > 0 && candidate.insideMin < targetGain * 0.55) return false;
             if (maxLoss > 0 && candidate.worstLoss > maxLoss * 1.35) return false;
+            if (['hat', 'flat', 'curve'].includes(inverseStrategy.shape) && candidate.outsideMax > candidate.insideAvg * 1.05) return false;
             return true;
           })
           .sort((a, b) => b.score - a.score)
@@ -3248,25 +3253,31 @@
 
       function applyInverseStrategy(candidate) {
         if (!candidate?.legs?.length) return;
-        const calls = candidate.legs.filter((leg) => leg.type === 'CALL');
-        const puts = candidate.legs.filter((leg) => leg.type === 'PUT');
-        const callCount = Math.max(DEFAULT_STRATEGY_ROWS_PER_SIDE, calls.length);
-        const putCount = Math.max(DEFAULT_STRATEGY_ROWS_PER_SIDE, puts.length);
-        const buildRows = (type, rows, count) => Array.from({ length: count }, (_item, index) => {
-          const leg = rows[index];
-          return {
-            id: `${type.toLowerCase()}-${index + 1}`,
-            type,
-            quantity: leg?.quantity ?? '',
-            symbol: leg?.symbol || '',
-            premium: leg?.premium ?? '',
+        const legs = fixedLegs.map((leg) => ({ ...leg, quantity: '', manualPrice: '' }));
+        for (const candidateLeg of candidate.legs) {
+          const symbol = String(candidateLeg.symbol || '').toUpperCase();
+          let targetIndex = legs.findIndex((leg) => String(leg.symbol || '').toUpperCase() === symbol);
+          if (targetIndex === -1) targetIndex = legs.findIndex((leg) => leg.type === candidateLeg.type && !leg.symbol);
+          if (targetIndex === -1) {
+            legs.push({
+              id: `${candidateLeg.type.toLowerCase()}-${legs.filter((leg) => leg.type === candidateLeg.type).length + 1}`,
+              type: candidateLeg.type,
+              quantity: '',
+              symbol: '',
+              premium: '',
+              manualPrice: ''
+            });
+            targetIndex = legs.length - 1;
+          }
+          legs[targetIndex] = {
+            ...legs[targetIndex],
+            type: candidateLeg.type,
+            quantity: candidateLeg.quantity,
+            symbol,
+            premium: candidateLeg.premium,
             manualPrice: ''
           };
-        });
-        const legs = [
-          ...buildRows('CALL', calls, callCount),
-          ...buildRows('PUT', puts, putCount)
-        ];
+        }
         strategy.legs = legs;
         applyStrategyChange({ ...strategy, legs });
         message.success('Estrategia sugerida cargada.');
