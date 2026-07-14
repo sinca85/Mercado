@@ -11,6 +11,8 @@
     { "source": "/", "destination": "/api/index?path=" },
     { "source": "/api/:path*", "destination": "/api/index?path=api/:path*" },
     { "source": "/login", "destination": "/api/index?path=login" },
+    { "source": "/inversas", "destination": "/api/index?path=inversas" },
+    { "source": "/inversas/:path*", "destination": "/api/index?path=inversas/:path*" },
     { "source": "/estrategias", "destination": "/api/index?path=estrategias" },
     { "source": "/estrategias/:path*", "destination": "/api/index?path=estrategias/:path*" },
     { "source": "/cotizaciones", "destination": "/api/index?path=cotizaciones" },

@@ -7,7 +7,7 @@
   <link rel="shortcut icon" href="/favicon.png">
   <link rel="apple-touch-icon" href="/favicon.png">
   <meta name="robots" content="noindex,nofollow,noarchive" />
-  <title>Estrategias de Opciones</title>
+  <title>Inversas de Opciones</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.21.6/dist/reset.css" />
   <style>
     :root {
@@ -1397,8 +1397,9 @@
 
     function getStrategyIdFromPath() {
       const parts = window.location.pathname.split('/').filter(Boolean);
+      if (parts[0] === 'inversas' && parts[1]) return parts[1];
       if (parts[0] === 'estrategias' && parts[1]) return parts[1];
-      if (parts[0] && !['cotizaciones', 'login'].includes(parts[0])) return parts[0];
+      if (parts[0] && !['cotizaciones', 'login', 'inversas'].includes(parts[0])) return parts[0];
       return null;
     }
 
@@ -1858,10 +1859,9 @@
       );
     }
 
-    function Landing({ onCreate, onCreateInverse }) {
+    function Landing({ onCreate }) {
       const [form] = Form.useForm();
       const [creating, setCreating] = useState(false);
-      const [creatingInverse, setCreatingInverse] = useState(false);
       const [strategies, setStrategies] = useState([]);
       const [loadingStrategies, setLoadingStrategies] = useState(true);
       const [deletingId, setDeletingId] = useState(null);
@@ -1891,15 +1891,6 @@
         }
       }
 
-      async function submitInverse() {
-        setCreatingInverse(true);
-        try {
-          await onCreateInverse(form.getFieldsValue(true));
-        } finally {
-          setCreatingInverse(false);
-        }
-      }
-
       async function deleteExistingStrategy(strategyId) {
         setDeletingId(strategyId);
         try {
@@ -1917,7 +1908,7 @@
         {
           title: 'Nombre',
           dataIndex: 'name',
-          render: (value, row) => <a href={`/${row.id}`}>{value || 'Estrategia sin nombre'}</a>
+          render: (value, row) => <a href={`/inversas/${row.id}`}>{value || 'Estrategia sin nombre'}</a>
         },
         {
           title: 'Subyacente',
@@ -1931,11 +1922,10 @@
         },
         {
           title: '',
-          width: 230,
+          width: 164,
           render: (_value, row) => (
             <Space size={6}>
-              <Button size="small" href={`/${row.id}`}>Entrar</Button>
-              <Button size="small" href={`/inversas/${row.id}`}>Inversa</Button>
+              <Button size="small" href={`/inversas/${row.id}`}>Entrar</Button>
               <Popconfirm
                 title="Eliminar planilla"
                 description="Esta accion no se puede deshacer."
@@ -1953,12 +1943,9 @@
       return (
         <div className="landing">
           <section className="hero">
-            <h2>Planilla web de estrategias con opciones</h2>
-            <p>Cada operador tiene su link, sus patas guardadas y cotizaciones actualizadas desde IOL. La logica de calculo vive en la app.</p>
-            <Space>
-              <Button type="primary" size="large" onClick={() => form.submit()} loading={creating}>Usar planilla</Button>
-              <Button size="large" onClick={submitInverse} loading={creatingInverse}>Usar plantilla inversa</Button>
-            </Space>
+            <h2>Buscador inverso de estrategias</h2>
+            <p>Defini una zona objetivo y deja que el motor pruebe combinaciones de bases para encontrar estructuras posibles.</p>
+            <Button type="primary" size="large" onClick={() => form.submit()} loading={creating}>Usar plantilla inversa</Button>
           </section>
           <section className="landing-panel">
             <Form form={form} layout="vertical" initialValues={{ name: 'GGAL Agosto', underlying: 'GGAL', monthCode: 'AG', volatility: 0.4, riskFreeRate: 0.125, useAutoIv: false, simulationEnabled: false }} onFinish={submit}>
@@ -2391,24 +2378,7 @@
           });
           setId(data.strategy.id);
           setPayload(data);
-          window.history.pushState(null, '', `/${data.strategy.id}`);
-        } catch (error) {
-          message.error(error.message);
-        }
-      }
-
-      async function createInverseStrategy(values) {
-        try {
-          const data = await requestJson('/api/strategies', {
-            method: 'POST',
-            body: JSON.stringify({
-              ...values,
-              name: values?.name ? `${values.name} inversa` : 'Inversa GGAL',
-              legs: makeFixedLegs(),
-              history: makeFixedHistory()
-            })
-          });
-          window.location.href = `/inversas/${data.strategy.id}`;
+          window.history.pushState(null, '', `/inversas/${data.strategy.id}`);
         } catch (error) {
           message.error(error.message);
         }
@@ -2432,7 +2402,7 @@
         }
       }
 
-      if (!id) return <Landing onCreate={createStrategy} onCreateInverse={createInverseStrategy} />;
+      if (!id) return <Landing onCreate={createStrategy} />;
       if (loading || !payload) return <Spin tip="Cargando estrategia..." fullscreen />;
 
       const strategy = payload.strategy;
@@ -3937,6 +3907,123 @@
                 columns={simulationColumns}
                 dataSource={simulationRows}
               />
+              <div className="inverse-strategy-panel">
+                <div className="inverse-strategy-title">Estrategia inversa</div>
+                <div className="inverse-strategy-grid">
+                  <div className="inverse-strategy-field">
+                    <label>Desde</label>
+                    <Select
+                      size="small"
+                      showSearch
+                      allowClear
+                      value={inverseStrategy.from ?? undefined}
+                      placeholder="Precio"
+                      options={inversePriceOptions}
+                      optionFilterProp="label"
+                      onChange={(from) => setInverseStrategy((current) => ({ ...current, from: from ?? null }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Hasta</label>
+                    <Select
+                      size="small"
+                      showSearch
+                      allowClear
+                      value={inverseStrategy.to ?? undefined}
+                      placeholder="Precio"
+                      options={inversePriceOptions}
+                      optionFilterProp="label"
+                      onChange={(to) => setInverseStrategy((current) => ({ ...current, to: to ?? null }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Bases desde</label>
+                    <Select
+                      size="small"
+                      showSearch
+                      allowClear
+                      value={inverseStrategy.baseFrom ?? undefined}
+                      placeholder="Base"
+                      options={rangeBaseOptions}
+                      optionFilterProp="label"
+                      onChange={(baseFrom) => setInverseStrategy((current) => ({ ...current, baseFrom: baseFrom ?? null }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Bases hasta</label>
+                    <Select
+                      size="small"
+                      showSearch
+                      allowClear
+                      value={inverseStrategy.baseTo ?? undefined}
+                      placeholder="Base"
+                      options={rangeBaseOptions}
+                      optionFilterProp="label"
+                      onChange={(baseTo) => setInverseStrategy((current) => ({ ...current, baseTo: baseTo ?? null }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Ganancia objetivo</label>
+                    <InputNumber
+                      size="small"
+                      value={inverseStrategy.targetGain}
+                      step={1000}
+                      style={{ width: '100%' }}
+                      placeholder="Ej. 100000"
+                      onChange={(targetGain) => setInverseStrategy((current) => ({ ...current, targetGain }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Perdida maxima</label>
+                    <InputNumber
+                      size="small"
+                      value={inverseStrategy.maxLoss}
+                      min={0}
+                      step={1000}
+                      style={{ width: '100%' }}
+                      placeholder="Ej. 50000"
+                      onChange={(maxLoss) => setInverseStrategy((current) => ({ ...current, maxLoss }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>Figura</label>
+                    <Select
+                      size="small"
+                      value={inverseStrategy.shape}
+                      options={[
+                        { value: 'hat', label: 'Galera' },
+                        { value: 'curve', label: 'Curva' },
+                        { value: 'ramp-up', label: 'Subida' },
+                        { value: 'ramp-down', label: 'Bajada' },
+                        { value: 'flat', label: 'Meseta' }
+                      ]}
+                      onChange={(shape) => setInverseStrategy((current) => ({ ...current, shape }))}
+                    />
+                  </div>
+                  <div className="inverse-strategy-field">
+                    <label>&nbsp;</label>
+                    <Button
+                      size="small"
+                      type="primary"
+                      onClick={searchInverseStrategies}
+                    >
+                      Buscar
+                    </Button>
+                  </div>
+                </div>
+                {inverseResults.length ? (
+                  <div className="inverse-results">
+                    <Table
+                      className="sheet-table"
+                      size="small"
+                      rowKey="id"
+                      pagination={false}
+                      columns={inverseResultColumns}
+                      dataSource={inverseResults}
+                    />
+                  </div>
+                ) : null}
+              </div>
             </section>
 
             <section className="panel">
@@ -4039,7 +4126,7 @@
       const [simulationHistoryOpen, setSimulationHistoryOpen] = useState(false);
       const [simulationHistoryLoading, setSimulationHistoryLoading] = useState(false);
       const [simulationHistory, setSimulationHistory] = useState([]);
-      const pageTitle = strategyName ? `Planilla Sabro - ${strategyName}` : 'Planilla Sabro';
+      const pageTitle = strategyName ? `Inversa Sabro - ${strategyName}` : 'Inversa Sabro';
       const activeStrategyId = getStrategyIdFromPath();
 
       useEffect(() => {
@@ -4207,7 +4294,7 @@
                     {simulationStatus.completed ? <Tag color="green">Simulacion completa</Tag> : null}
                   </>
                 ) : null}
-                <Button href="/" type="primary">Nueva estrategia</Button>
+                <Button href="/inversas" type="primary">Nueva inversa</Button>
               </Space>
             </header>
             <div className="content">

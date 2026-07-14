@@ -571,6 +571,10 @@ app.get(['/simulacion-chart', '/simulacion-chart/:id'], (_req, res) => {
   res.sendFile(path.join(publicDir, 'simulacion-chart.html'));
 });
 
+app.get(['/inversas', '/inversas/:id'], (_req, res) => {
+  res.sendFile(path.join(publicDir, 'inversas.html'));
+});
+
 app.get(['/', '/estrategias', '/estrategias/:id', '/:id'], (_req, res) => {
   res.sendFile(path.join(publicDir, 'estrategias.html'));
 });
