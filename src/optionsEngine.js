@@ -53,6 +53,7 @@ const MONTH_CODE_TO_MONTH = {
 };
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const CANONICAL_MONTH_CODES = ['EN', 'FE', 'MR', 'AB', 'MY', 'JN', 'JL', 'AG', 'SE', 'OC', 'NO', 'DI'];
 
 export function cleanSymbol(value) {
   return String(value || '').toUpperCase().replace(/\s+-\s+.*$/, '').replace(/\s/g, '');
@@ -97,7 +98,7 @@ export function parseOptionSymbol(rawSymbol) {
     root: match[1],
     optionType: match[2] === 'C' ? 'CALL' : 'PUT',
     strike: Number(String(match[3]).replace(',', '.')),
-    monthCode: match[4] || null
+    monthCode: CANONICAL_MONTH_CODES[MONTH_CODE_TO_MONTH[match[4] || '']] || match[4] || null
   };
 }
 
@@ -319,7 +320,8 @@ export function calculateStrategy({
     const type = String(leg.type || 'CALL').toUpperCase();
     const contract = type === 'ACC' ? null : findContract(optionsBySymbol, leg);
     const quantity = numberValue(leg.quantity, 0) || 0;
-    const strike = numberValue(leg.strike, contract?.strike, 0) || 0;
+    const parsedLeg = parseOptionSymbol(leg.symbol || leg.base);
+    const strike = numberValue(leg.strike, contract?.strike, parsedLeg.strike, 0) || 0;
     const currentPrice = type === 'ACC' ? (spot || 0) : legCurrentPrice(leg, contract);
     const premium = leg.source === 'history'
       ? numberValue(leg.premium, 0) || 0

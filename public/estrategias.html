@@ -945,6 +945,11 @@
       return type === 'PUT' ? Math.max(strike - spot, 0) : Math.max(spot - strike, 0);
     }
 
+    function optionStrikeFromSymbol(symbol) {
+      const match = String(symbol || '').toUpperCase().replace(/\s/g, '').match(/^[A-Z]{2,6}[CV](\d+(?:[.,]\d+)?)/);
+      return match ? parseNumeric(match[1]) : null;
+    }
+
     function optionMark(option) {
       return parseNumeric(option?.mark)
         ?? parseNumeric(option?.last)
@@ -1013,7 +1018,7 @@
         const symbol = String(leg.symbol || '').toUpperCase();
         const contract = optionsBySymbol.get(symbol);
         const quantity = parseNumeric(leg.quantity) ?? 0;
-        const strike = parseNumeric(leg.strike) ?? parseNumeric(contract?.strike) ?? 0;
+        const strike = parseNumeric(leg.strike) ?? parseNumeric(contract?.strike) ?? optionStrikeFromSymbol(symbol) ?? 0;
         const currentPrice = type === 'ACC' ? spot : optionMark(contract);
         const premium = leg.source === 'history'
           ? parseNumeric(leg.premium) ?? 0
@@ -2450,21 +2455,12 @@
       const calculationLegs = includeStrategyLoad
         ? fixedLegs
         : fixedLegs.map((leg) => ({ ...leg, quantity: '', manualPrice: '' }));
-      const calculation = simulationSpot
-        ? calculateLocalStrategySnapshot({
-            strategy: { ...strategy, legs: calculationLegs, history: fixedHistory },
-            options: chainOptions,
-            spot: simulationSpot,
-            simulatedNow
-          })
-        : includeStrategyLoad
-        ? payload.calculation
-        : calculateLocalStrategySnapshot({
-            strategy: { ...strategy, legs: calculationLegs, history: fixedHistory },
-            options: chainOptions,
-            spot: payload.calculation?.spot || strategy.targetSpot || 0,
-            simulatedNow
-          });
+      const calculation = calculateLocalStrategySnapshot({
+        strategy: { ...strategy, legs: calculationLegs, history: fixedHistory },
+        options: chainOptions,
+        spot: simulationSpot || payload.calculation?.spot || strategy.targetSpot || 0,
+        simulatedNow
+      });
       if (strategy.legs.length !== fixedLegs.length || strategy.legs.some((leg, index) => leg.id !== fixedLegs[index].id || leg.type !== fixedLegs[index].type)) {
         strategy.legs = fixedLegs;
       }

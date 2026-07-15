@@ -599,12 +599,14 @@
       const symbol = cleanSymbol(rawSymbol);
       const match = symbol.match(/^([A-Z]{2,5})([CV])(\d+(?:[.,]\d+)?)(?:\.?)([A-Z]{1,2})?/);
       if (!match) return { root: symbol.slice(0, 4), optionType: null, strike: null, monthCode: null };
+      const monthCodeToMonth = { EN: 0, FE: 1, MR: 2, AB: 3, MY: 4, JN: 5, JL: 6, L: 6, AG: 7, G: 7, SE: 8, OC: 9, O: 9, NO: 10, DI: 11 };
+      const canonicalMonthCodes = ['EN', 'FE', 'MR', 'AB', 'MY', 'JN', 'JL', 'AG', 'SE', 'OC', 'NO', 'DI'];
 
       return {
         root: match[1],
         optionType: match[2] === 'C' ? 'CALL' : 'PUT',
         strike: Number(String(match[3]).replace(',', '.')),
-        monthCode: match[4] || null
+        monthCode: canonicalMonthCodes[monthCodeToMonth[match[4] || '']] || match[4] || null
       };
     }
 
