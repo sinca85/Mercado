@@ -4159,6 +4159,14 @@
       }, [simulationHistoryOpen, activeStrategyId]);
 
       const simulationHistoryTotal = simulationHistory.reduce((sum, row) => sum + Number(row.result || 0), 0);
+      const simulationHistoryWonTotal = simulationHistory.reduce((sum, row) => {
+        const result = Number(row.result || 0);
+        return result > 0 ? sum + result : sum;
+      }, 0);
+      const simulationHistoryLostTotal = simulationHistory.reduce((sum, row) => {
+        const result = Number(row.result || 0);
+        return result < 0 ? sum + result : sum;
+      }, 0);
       const simulationHistoryWins = simulationHistory.filter((row) => Number(row.result || 0) > 0).length;
       const simulationHistoryLosses = simulationHistory.filter((row) => Number(row.result || 0) < 0).length;
       const simulationHistoryColumns = [
@@ -4318,6 +4326,10 @@
                 <span className={simulationHistoryTotal >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 900 }}>
                   {formatMoney(simulationHistoryTotal)}
                 </span>
+                <span className="muted" style={{ marginLeft: 18 }}>Ganado: </span>
+                <span className="positive" style={{ fontWeight: 900 }}>{formatMoney(simulationHistoryWonTotal)}</span>
+                <span className="muted" style={{ marginLeft: 14 }}>Perdido: </span>
+                <span className="negative" style={{ fontWeight: 900 }}>{formatMoney(simulationHistoryLostTotal)}</span>
                 <span className="muted" style={{ marginLeft: 18 }}>Ganados: </span>
                 <span className="positive" style={{ fontWeight: 900 }}>{simulationHistoryWins}</span>
                 <span className="muted" style={{ marginLeft: 14 }}>Perdidos: </span>
