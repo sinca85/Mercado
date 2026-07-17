@@ -1525,6 +1525,14 @@
       const editInputRef = useRef(null);
       const gridIdRef = useRef(`grid-${Math.random().toString(36).slice(2)}`);
 
+      function markActiveGrid() {
+        window.__sabroActiveSpreadsheetGrid = gridIdRef.current;
+      }
+
+      function isActiveGrid() {
+        return window.__sabroActiveSpreadsheetGrid === gridIdRef.current;
+      }
+
       useEffect(() => {
         const stopDragging = () => {
           draggingRef.current = false;
@@ -1553,6 +1561,23 @@
         }
       }, [editingCell]);
 
+      useEffect(() => {
+        const handleDocumentCopy = (event) => {
+          if (!isActiveGrid() || editingCell) return;
+          copySelection(event);
+        };
+        const handleDocumentPaste = (event) => {
+          if (!isActiveGrid() || editingCell) return;
+          pasteSelection(event);
+        };
+        document.addEventListener('copy', handleDocumentCopy);
+        document.addEventListener('paste', handleDocumentPaste);
+        return () => {
+          document.removeEventListener('copy', handleDocumentCopy);
+          document.removeEventListener('paste', handleDocumentPaste);
+        };
+      }, [selection, editingCell, rows]);
+
       function bounds() {
         const start = selection.start || { row: 0, col: 0 };
         const end = selection.end || start;
@@ -1580,6 +1605,7 @@
 
       function selectCell(rowIndex, colIndex) {
         const next = { start: { row: rowIndex, col: colIndex }, end: { row: rowIndex, col: colIndex } };
+        markActiveGrid();
         setEditingCell(null);
         setSelection(next);
         onCellFocus?.(rowIndex, colIndex);
@@ -1774,6 +1800,7 @@
           ref={wrapRef}
           className="input-grid-wrap"
           tabIndex={0}
+          onFocus={markActiveGrid}
           onCopy={copySelection}
           onPaste={pasteSelection}
           onKeyDown={handleGridKeyDown}
